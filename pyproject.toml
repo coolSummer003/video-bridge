@@ -1,0 +1,26 @@
+[project]
+name = "video-bridge"
+version = "0.1.0"
+description = "macOS 本地视频搬运/字幕/去重桌面 MVP"
+requires-python = ">=3.12"
+dependencies = [
+    "PySide6-Essentials>=6.7",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+]
+
+[project.scripts]
+video-bridge = "app.main:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
