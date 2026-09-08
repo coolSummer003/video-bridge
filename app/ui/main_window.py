@@ -6,13 +6,15 @@ import os
 import threading
 from pathlib import Path
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QUrl, Qt, Signal
+from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDoubleSpinBox,
     QFileDialog,
     QFormLayout,
+    QFrame,
     QGroupBox,
     QHBoxLayout,
     QLabel,
@@ -22,6 +24,7 @@ from PySide6.QtWidgets import (
     QPlainTextEdit,
     QProgressBar,
     QPushButton,
+    QScrollArea,
     QSpinBox,
     QTabWidget,
     QVBoxLayout,
@@ -109,8 +112,12 @@ class MainWindow(QMainWindow):
         btn = QPushButton("选择目录")
         btn.setProperty("secondary", True)
         btn.clicked.connect(self._pick_download_dir)
+        btn_open = QPushButton("打开")
+        btn_open.setProperty("secondary", True)
+        btn_open.clicked.connect(lambda: self._open_dir(self.download_dir.text()))
         dir_row.addWidget(self.download_dir, 1)
         dir_row.addWidget(btn)
+        dir_row.addWidget(btn_open)
         form.addRow("输出目录", dir_row)
 
         self.btn_download = QPushButton("开始下载")
@@ -358,7 +365,15 @@ class MainWindow(QMainWindow):
     # ---------- 去重模块 ----------
     def _build_dedup_tab(self) -> QWidget:
         page = QWidget()
-        outer = QVBoxLayout(page)
+        root_layout = QVBoxLayout(page)
+        root_layout.setContentsMargins(0, 0, 0, 0)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+
+        container = QWidget()
+        outer = QVBoxLayout(container)
         outer.setContentsMargins(4, 8, 4, 4)
         group = QGroupBox("去重 / 二创")
         form = QFormLayout(group)
@@ -367,6 +382,9 @@ class MainWindow(QMainWindow):
         form.setVerticalSpacing(12)
         outer.addWidget(group)
         outer.addStretch(1)
+
+        scroll.setWidget(container)
+        root_layout.addWidget(scroll)
 
         file_row = QHBoxLayout()
         self.dedup_file = QLineEdit()
@@ -383,8 +401,12 @@ class MainWindow(QMainWindow):
         btn_dir = QPushButton("选择目录")
         btn_dir.setProperty("secondary", True)
         btn_dir.clicked.connect(self._pick_dedup_dir)
+        btn_open_dir = QPushButton("打开")
+        btn_open_dir.setProperty("secondary", True)
+        btn_open_dir.clicked.connect(lambda: self._open_dir(self.dedup_dir.text()))
         dir_row.addWidget(self.dedup_dir, 1)
         dir_row.addWidget(btn_dir)
+        dir_row.addWidget(btn_open_dir)
         form.addRow("输出目录", dir_row)
 
         mix_row = QHBoxLayout()
@@ -645,6 +667,13 @@ class MainWindow(QMainWindow):
             self.task_finished.emit(button)
 
     # ---------- 通用 ----------
+    def _open_dir(self, path: str):
+        path = (path or "").strip()
+        if not path or not os.path.isdir(path):
+            QMessageBox.warning(self, "提示", "目录不存在或尚未创建")
+            return
+        QDesktopServices.openUrl(QUrl.fromLocalFile(path))
+
     def _start(self, button, task, *args):
         button.setEnabled(False)
         thread = threading.Thread(target=task, args=(button, *args), daemon=True)
