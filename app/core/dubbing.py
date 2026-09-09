@@ -7,10 +7,22 @@ import os
 import edge_tts
 
 VOICES = [
-    ("晓晓（中文女声）", "zh-CN-XiaoxiaoNeural"),
-    ("云希（中文男声）", "zh-CN-YunxiNeural"),
-    ("云扬（中文男声·新闻）", "zh-CN-YunyangNeural"),
-    ("晓伊（中文女声·甜）", "zh-CN-XiaoyiNeural"),
+    # 情感类
+    ("晓晓（情感女声·温柔）", "zh-CN-XiaoxiaoNeural"),
+    # 元气类
+    ("晓伊（元气少女·甜美）", "zh-CN-XiaoyiNeural"),
+    # 活力/青年
+    ("云希（活力青年·阳光）", "zh-CN-YunxiNeural"),
+    # 解说/激情
+    ("云健（解说男声·激情）", "zh-CN-YunjianNeural"),
+    # 磁性/沉稳/新闻
+    ("云扬（磁性男声·沉稳）", "zh-CN-YunyangNeural"),
+    # 少年/青涩
+    ("云夏（少年音·清爽）", "zh-CN-YunxiaNeural"),
+    # 特色方言
+    ("小北（东北话·特色女声）", "zh-CN-liaoning-XiaobeiNeural"),
+    ("小妮（陕西话·特色女声）", "zh-CN-shaanxi-XiaoniNeural"),
+    # 多语种
     ("Aria（英文女声）", "en-US-AriaNeural"),
     ("Guy（英文男声）", "en-US-GuyNeural"),
     ("Nanami（日文女声）", "ja-JP-NanamiNeural"),
