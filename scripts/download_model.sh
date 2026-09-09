@@ -1,6 +1,6 @@
 #!/bin/bash
 # 下载 whisper.cpp 模型到 models/，默认 small（约 500MB）。
-# 国内优先走 hf-mirror.com，失败后回退 huggingface.co。
+# 国内优先走 ModelScope，失败后回退 hf-mirror / HuggingFace。
 set -euo pipefail
 cd "$(dirname "$0")/.."
 mkdir -p models
@@ -13,6 +13,7 @@ if [ -f "$DEST" ]; then
 fi
 
 URLS=(
+  "https://modelscope.cn/models/iceCream2025/whisper.cpp/resolve/master/$MODEL_NAME"
   "https://hf-mirror.com/ggerganov/whisper.cpp/resolve/main/$MODEL_NAME"
   "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/$MODEL_NAME"
 )

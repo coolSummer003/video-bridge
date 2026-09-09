@@ -12,8 +12,19 @@ from pathlib import Path
 from .audio8 import is_audio8_available
 
 AUDIO8_REPO = "https://github.com/Audio8-AI/Audio8_TTS.git"
-AUDIO8_MODEL_REPO = "Audio8/Audio8-TTS-Preview-0.6B-ONNX-INT4"
-AUDIO8_MODEL_FILES = ["slow_ar_int4.onnx", "fast_ar_int4.onnx", "codec_decoder_fp16.onnx"]
+AUDIO8_MODEL_REPO = "Audio8/audio8-TTS-0.1B-ONNX-INT8"
+AUDIO8_MODEL_BASE_URL = "https://modelscope.cn/models/Audio8/audio8-TTS-0.1B-ONNX-INT8/resolve/master"
+AUDIO8_MODEL_FILES = [
+    "runtime_manifest.json",
+    "slow_ar_int8.onnx",
+    "slow_ar_int8.onnx.data",
+    "fast_ar_int8.onnx",
+    "fast_ar_int8.onnx.data",
+    "codec_decoder_fp16.onnx",
+    "codec_decoder_fp16.onnx.data",
+    "tokenizer/tokenizer.json",
+    "reference_codes.npy",
+]
 
 _ROOT = Path(__file__).resolve().parents[2] / "models" / "audio8"
 _RUNTIME_DIR = _ROOT / "onnx_runtime"
@@ -51,6 +62,24 @@ def ensure_runtime_downloaded(on_status=None) -> Path:
     return _RUNTIME_DIR
 
 
+def _download_model_file(rel_path: str, log):
+    dest = _MODEL_DIR / rel_path
+    if dest.exists() and dest.stat().st_size > 0:
+        return
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    url = f"{AUDIO8_MODEL_BASE_URL}/{rel_path}"
+    log(f"下载模型文件: {rel_path}")
+    tmp = str(dest) + ".part"
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+    with urllib.request.urlopen(req, timeout=60) as resp, open(tmp, "wb") as f:
+        while True:
+            chunk = resp.read(512 * 1024)
+            if not chunk:
+                break
+            f.write(chunk)
+    os.replace(tmp, dest)
+
+
 def ensure_model_downloaded(on_status=None) -> Path:
     log = _status(on_status)
     if _model_ready():
@@ -58,21 +87,9 @@ def ensure_model_downloaded(on_status=None) -> Path:
 
     ensure_runtime_downloaded(on_status=on_status)
     _MODEL_DIR.mkdir(parents=True, exist_ok=True)
-    log("首次使用：正在下载 Audio8 模型（约 600MB~1GB），请耐心等待...")
-    try:
-        from huggingface_hub import snapshot_download
-        snapshot_download(
-            repo_id=AUDIO8_MODEL_REPO,
-            local_dir=str(_MODEL_DIR),
-        )
-    except Exception:
-        # 尝试通过 hf-mirror
-        os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
-        from huggingface_hub import snapshot_download
-        snapshot_download(
-            repo_id=AUDIO8_MODEL_REPO,
-            local_dir=str(_MODEL_DIR),
-        )
+    log("首次使用：正在从 ModelScope 下载 Audio8 0.1B 模型，请耐心等待...")
+    for rel in AUDIO8_MODEL_FILES:
+        _download_model_file(rel, log)
     if not _model_ready():
         raise RuntimeError("Audio8 模型下载不完整")
     log("Audio8 模型下载完成")

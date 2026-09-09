@@ -15,7 +15,7 @@
 1. 下载：粘贴分享文本/链接 → 自动解析出抖音/B站等视频链接，使用 yt-dlp 下载到本地目录
 2. 字幕：选择本地视频 → whisper.cpp 生成 SRT；默认同时烧录字幕到视频画面，输出 `*.subbed.mp4`；首次使用时若无模型会自动提示下载
 3. 去重：选择本地视频 → 可选抽帧混合、随机片段重排、画中画、滤镜参数变体、BGM 叠加，输出强差异新视频
-4. 配音：输入文字 → Audio8 TTS 本地高质量配音 → 输出 WAV/MP3
+4. 配音：输入文字 → Audio8 TTS 0.1B（ModelScope 国内模型）本地配音 → 输出 WAV/MP3
 
 ## 开发运行
 
@@ -25,7 +25,7 @@ python3.12 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
 
-# 2. 下载字幕模型（也可以不手动下载，桌面端首次生成字幕时会自动提示下载）
+# 2. 下载字幕模型（也可以不手动下载，桌面端首次生成字幕时会自动提示下载；国内默认 ModelScope）
 scripts/download_model.sh ggml-small.bin
 
 # 3. 启动桌面端

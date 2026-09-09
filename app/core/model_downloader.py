@@ -1,4 +1,4 @@
-"""whisper.cpp 模型下载：默认从 hf-mirror / huggingface 下载。"""
+"""whisper.cpp 模型下载：默认从 ModelScope 国内仓库下载。"""
 from __future__ import annotations
 
 import os
@@ -6,6 +6,7 @@ import urllib.request
 from typing import Callable
 
 MODEL_URLS = [
+    "https://modelscope.cn/models/iceCream2025/whisper.cpp/resolve/master/{name}",
     "https://hf-mirror.com/ggerganov/whisper.cpp/resolve/main/{name}",
     "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/{name}",
 ]
