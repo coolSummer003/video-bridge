@@ -63,6 +63,7 @@ class MainWindow(QMainWindow):
         self.model_ready.connect(self._on_model_ready)
         self.model_finished.connect(self._on_model_finished)
         self.douyin_login_done.connect(self._on_douyin_login_done)
+        self._douyin_cookie_path: str | None = None
         self._build_ui()
         self._init_model_state()
 
@@ -128,25 +129,18 @@ class MainWindow(QMainWindow):
         self.download_platform.setCurrentIndex(0)
         form.addRow("平台", self.download_platform)
 
-        self.download_browser = QComboBox()
-        for label, code in [("不使用浏览器 Cookie", ""), ("Chrome", "chrome"), ("Safari", "safari"), ("Edge", "edge")]:
-            self.download_browser.addItem(label, code)
-        form.addRow("浏览器 Cookie", self.download_browser)
-
-        cookie_row = QHBoxLayout()
-        self.download_cookies_file = QLineEdit()
-        self.download_cookies_file.setPlaceholderText("可选：cookies.txt 文件（抖音需要 Fresh cookies）")
-        btn_cookie = QPushButton("选择 Cookie")
-        btn_cookie.setProperty("secondary", True)
-        btn_cookie.clicked.connect(self._pick_download_cookies)
-        cookie_row.addWidget(self.download_cookies_file, 1)
-        cookie_row.addWidget(btn_cookie)
-        form.addRow("Cookie 文件", cookie_row)
-
-        self.btn_douyin_login = QPushButton("抖音扫码登录（获取登录 Cookie）")
+        self.douyin_login_widget = QWidget()
+        douyin_row = QHBoxLayout(self.douyin_login_widget)
+        douyin_row.setContentsMargins(0, 0, 0, 0)
+        douyin_label = QLabel("抖音视频需要 Cookie，请先获取：")
+        self.btn_douyin_login = QPushButton("抖音扫码登录 / 获取 Cookie")
         self.btn_douyin_login.setProperty("secondary", True)
         self.btn_douyin_login.clicked.connect(self._run_douyin_login)
-        form.addRow("", self.btn_douyin_login)
+        douyin_row.addWidget(douyin_label)
+        douyin_row.addWidget(self.btn_douyin_login)
+        douyin_row.addStretch(1)
+        self.douyin_login_widget.hide()
+        form.addRow("抖音 Cookie", self.douyin_login_widget)
 
         dir_row = QHBoxLayout()
         self.download_dir = QLineEdit(str(Path.home() / "Downloads" / "VideoBridge"))
@@ -171,16 +165,6 @@ class MainWindow(QMainWindow):
         if d:
             self.download_dir.setText(d)
 
-    def _pick_download_cookies(self):
-        f, _ = QFileDialog.getOpenFileName(
-            self,
-            "选择 Cookie 文件",
-            str(Path.home()),
-            "Cookie (*.txt);;All files (*)",
-        )
-        if f:
-            self.download_cookies_file.setText(f)
-
     def _run_douyin_login(self):
         self.btn_douyin_login.setEnabled(False)
         self._log("打开抖音扫码登录窗口，请使用手机抖音扫码...")
@@ -196,8 +180,9 @@ class MainWindow(QMainWindow):
             self.task_finished.emit(self.btn_douyin_login)
 
     def _on_douyin_login_done(self, path: str):
-        self.download_cookies_file.setText(path)
-        self._log(f"抖音登录 Cookie 已保存: {path}")
+        self._douyin_cookie_path = path
+        self._log("抖音登录成功，Cookie 已保存")
+        self.btn_douyin_login.setText("抖音 Cookie 已就绪")
         self.btn_douyin_login.setEnabled(True)
 
     def _refresh_download_url(self):
@@ -207,6 +192,11 @@ class MainWindow(QMainWindow):
             self.download_url_clean.setText(url)
         else:
             self.download_url_clean.clear()
+        self._update_douyin_login_visibility(url)
+
+    def _update_douyin_login_visibility(self, url: str | None):
+        is_douyin = bool(url and detect_platform(url) == "douyin")
+        self.douyin_login_widget.setVisible(is_douyin)
 
     def _run_download(self):
         raw_text = self.download_url.toPlainText().strip()
@@ -219,11 +209,7 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "提示", "请选择输出目录")
             return
         platform = self.download_platform.currentData() or "auto"
-        cookies_file = self.download_cookies_file.text().strip()
-        browser = self.download_browser.currentData() or ""
-        if cookies_file and not os.path.isfile(cookies_file):
-            QMessageBox.warning(self, "提示", "Cookie 文件不存在")
-            return
+        cookies_file = self._douyin_cookie_path or ""
         self._start(
             self.btn_download,
             self._task_download,
@@ -231,7 +217,7 @@ class MainWindow(QMainWindow):
             output_dir,
             platform,
             cookies_file,
-            browser,
+            "",
         )
 
     def _task_download(
@@ -250,7 +236,8 @@ class MainWindow(QMainWindow):
                 self._log("检测到抖音视频链接，自动获取抖音 Fresh Cookie...")
                 try:
                     cookies_file = fetch_douyin_cookies()
-                    self._log(f"抖音 Cookie 获取完成: {cookies_file}")
+                    self._douyin_cookie_path = cookies_file
+                    self._log("抖音 Cookie 获取完成")
                 except Exception as exc:
                     self._log(f"[自动获取 Cookie 失败] {exc}")
                     raise RuntimeError("自动获取抖音 Cookie 失败，请手动选择 Cookie 文件或浏览器 Cookie") from exc
