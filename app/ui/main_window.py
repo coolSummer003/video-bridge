@@ -124,6 +124,21 @@ class MainWindow(QMainWindow):
         self.download_platform.setCurrentIndex(0)
         form.addRow("平台", self.download_platform)
 
+        self.download_browser = QComboBox()
+        for label, code in [("不使用浏览器 Cookie", ""), ("Chrome", "chrome"), ("Safari", "safari"), ("Edge", "edge")]:
+            self.download_browser.addItem(label, code)
+        form.addRow("浏览器 Cookie", self.download_browser)
+
+        cookie_row = QHBoxLayout()
+        self.download_cookies_file = QLineEdit()
+        self.download_cookies_file.setPlaceholderText("可选：cookies.txt 文件（抖音需要 Fresh cookies）")
+        btn_cookie = QPushButton("选择 Cookie")
+        btn_cookie.setProperty("secondary", True)
+        btn_cookie.clicked.connect(self._pick_download_cookies)
+        cookie_row.addWidget(self.download_cookies_file, 1)
+        cookie_row.addWidget(btn_cookie)
+        form.addRow("Cookie 文件", cookie_row)
+
         dir_row = QHBoxLayout()
         self.download_dir = QLineEdit(str(Path.home() / "Downloads" / "VideoBridge"))
         btn = QPushButton("选择目录")
@@ -147,6 +162,16 @@ class MainWindow(QMainWindow):
         if d:
             self.download_dir.setText(d)
 
+    def _pick_download_cookies(self):
+        f, _ = QFileDialog.getOpenFileName(
+            self,
+            "选择 Cookie 文件",
+            str(Path.home()),
+            "Cookie (*.txt);;All files (*)",
+        )
+        if f:
+            self.download_cookies_file.setText(f)
+
     def _refresh_download_url(self):
         text = self.download_url.toPlainText().strip()
         url = extract_video_url(text) or text
@@ -166,9 +191,30 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "提示", "请选择输出目录")
             return
         platform = self.download_platform.currentData() or "auto"
-        self._start(self.btn_download, self._task_download, url, output_dir, platform)
+        cookies_file = self.download_cookies_file.text().strip()
+        browser = self.download_browser.currentData() or ""
+        if cookies_file and not os.path.isfile(cookies_file):
+            QMessageBox.warning(self, "提示", "Cookie 文件不存在")
+            return
+        self._start(
+            self.btn_download,
+            self._task_download,
+            url,
+            output_dir,
+            platform,
+            cookies_file,
+            browser,
+        )
 
-    def _task_download(self, button, url: str, output_dir: str, platform: str):
+    def _task_download(
+        self,
+        button,
+        url: str,
+        output_dir: str,
+        platform: str,
+        cookies_file: str,
+        browser: str,
+    ):
         try:
             self._log(f"开始下载: {url}")
             bins = BinaryPaths.detect()
@@ -177,6 +223,8 @@ class MainWindow(QMainWindow):
                 url,
                 output_dir,
                 platform=None if platform == "auto" else platform,
+                cookies_file=cookies_file or None,
+                cookies_from_browser=browser or None,
                 binaries=bins,
                 on_line=self._log,
             )

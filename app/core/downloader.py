@@ -22,6 +22,8 @@ def download_video(
     output_dir: str,
     *,
     platform: str | None = None,
+    cookies_file: str | None = None,
+    cookies_from_browser: str | None = None,
     binaries: BinaryPaths | None = None,
     format_selector: str = "bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/bv*+ba/b",
     on_line: callable | None = None,
@@ -43,6 +45,14 @@ def download_video(
         "--no-playlist",
         "--newline",
         "--no-warnings",
+    ]
+    if cookies_file:
+        if not os.path.isfile(cookies_file):
+            raise FileNotFoundError(f"Cookie 文件不存在: {cookies_file}")
+        cmd += ["--cookies", cookies_file]
+    if cookies_from_browser:
+        cmd += ["--cookies-from-browser", cookies_from_browser]
+    cmd += [
         "-f",
         format_selector,
         "-o",
