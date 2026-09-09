@@ -48,6 +48,24 @@ def platform_name(platform: str) -> str:
     return PLATFORM_NAMES.get(platform, platform)
 
 
+URL_PATTERN = re.compile(r'https?://[^\s<>"\']+')
+
+
+def extract_video_url(text: str) -> str | None:
+    """从抖音/B站等分享文本中提取第一个可识别的视频链接。"""
+    if not text:
+        return None
+    text = text.strip()
+    # 如果用户直接粘贴了纯链接，直接返回
+    if text.startswith(("http://", "https://")):
+        return text
+    for raw in URL_PATTERN.findall(text):
+        url = raw.rstrip(".,;:!?，。；：！？、\"'")
+        if detect_platform(url) != "other":
+            return url
+    return None
+
+
 def platform_options() -> list[tuple[str, str]]:
     return [
         ("自动检测", "auto"),

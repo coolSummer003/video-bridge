@@ -38,7 +38,7 @@ from ..core.dedup_advanced import add_background_music, dedup_frame_mix, dedup_p
 from ..core.downloader import download_video
 from ..core.dubbing import RATES, text_to_speech, voice_options
 from ..core.model_downloader import download_model
-from ..core.platforms import platform_options
+from ..core.platforms import extract_video_url, platform_options
 from ..core.subtitle import burn_subtitles, generate_srt
 
 
@@ -107,9 +107,16 @@ class MainWindow(QMainWindow):
         outer.addWidget(group)
         outer.addStretch(1)
 
-        self.download_url = QLineEdit()
-        self.download_url.setPlaceholderText("粘贴公开视频链接，支持抖音 / Bilibili / YouTube 等")
-        form.addRow("视频链接", self.download_url)
+        self.download_url = QTextEdit()
+        self.download_url.setPlaceholderText("粘贴抖音 / Bilibili 分享文本或视频链接\n例如：https://v.douyin.com/xxxx/ 复制此链接，打开Dou音搜索…")
+        self.download_url.setMinimumHeight(78)
+        self.download_url.textChanged.connect(self._refresh_download_url)
+        form.addRow("分享文本", self.download_url)
+
+        self.download_url_clean = QLineEdit()
+        self.download_url_clean.setReadOnly(True)
+        self.download_url_clean.setPlaceholderText("自动解析出的视频链接")
+        form.addRow("解析链接", self.download_url_clean)
 
         self.download_platform = QComboBox()
         for label, code in platform_options():
@@ -140,8 +147,17 @@ class MainWindow(QMainWindow):
         if d:
             self.download_dir.setText(d)
 
+    def _refresh_download_url(self):
+        text = self.download_url.toPlainText().strip()
+        url = extract_video_url(text) or text
+        if url and url.startswith(("http://", "https://")):
+            self.download_url_clean.setText(url)
+        else:
+            self.download_url_clean.clear()
+
     def _run_download(self):
-        url = self.download_url.text().strip()
+        raw_text = self.download_url.toPlainText().strip()
+        url = self.download_url_clean.text().strip() or extract_video_url(raw_text) or raw_text
         output_dir = self.download_dir.text().strip()
         if not url:
             QMessageBox.warning(self, "提示", "请先粘贴视频链接")
