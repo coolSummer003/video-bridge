@@ -15,7 +15,7 @@
 1. 下载：粘贴链接 → yt-dlp 下载到本地目录
 2. 字幕：选择本地视频 → whisper.cpp 生成 SRT；默认同时烧录字幕到视频画面，输出 `*.subbed.mp4`；首次使用时若无模型会自动提示下载
 3. 去重：选择本地视频 → 可选抽帧混合、随机片段重排、画中画、滤镜参数变体、BGM 叠加，输出强差异新视频
-4. 配音：输入文字 → Edge-TTS 神经网络配音 → 输出 MP3
+4. 配音：输入文字 → Piper TTS 本地离线配音 → 输出 WAV/MP3
 
 ## 开发运行
 
@@ -84,7 +84,7 @@ app/
     subtitle.py     # whisper-cli 字幕
     dedup.py        # ffmpeg 滤镜参数去重
     dedup_advanced.py # 双视频抽帧混合 / BGM 叠加
-      dubbing.py        # Edge-TTS 配音
+      dubbing.py        # Piper TTS 本地配音
   ui/
     main_window.py    # PySide6 三个模块页签主窗口
   main.py

@@ -16,3 +16,5 @@ resources/bin/
 vendor/
 
 *.egg-info/
+
+models/piper/
