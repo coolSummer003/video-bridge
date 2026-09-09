@@ -6,6 +6,7 @@ import subprocess
 from dataclasses import dataclass
 
 from .config import BinaryPaths
+from .platforms import detect_platform, platform_name
 
 
 @dataclass
@@ -20,6 +21,7 @@ def download_video(
     url: str,
     output_dir: str,
     *,
+    platform: str | None = None,
     binaries: BinaryPaths | None = None,
     format_selector: str = "bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/bv*+ba/b",
     on_line: callable | None = None,
@@ -30,6 +32,9 @@ def download_video(
     """
     if not url:
         raise ValueError("URL 不能为空")
+    detected = platform or detect_platform(url)
+    if on_line:
+        on_line(f"平台识别: {platform_name(detected)}")
     os.makedirs(output_dir, exist_ok=True)
     bins = binaries or BinaryPaths.detect()
     output_template = os.path.join(output_dir, "%(title).100B [%(id)s].%(ext)s")

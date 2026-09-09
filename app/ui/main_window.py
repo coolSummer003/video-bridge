@@ -38,6 +38,7 @@ from ..core.dedup_advanced import add_background_music, dedup_frame_mix, dedup_p
 from ..core.downloader import download_video
 from ..core.dubbing import RATES, text_to_speech, voice_options
 from ..core.model_downloader import download_model
+from ..core.platforms import platform_options
 from ..core.subtitle import burn_subtitles, generate_srt
 
 
@@ -107,8 +108,14 @@ class MainWindow(QMainWindow):
         outer.addStretch(1)
 
         self.download_url = QLineEdit()
-        self.download_url.setPlaceholderText("粘贴公开视频链接")
+        self.download_url.setPlaceholderText("粘贴公开视频链接，支持抖音 / Bilibili / YouTube 等")
         form.addRow("视频链接", self.download_url)
+
+        self.download_platform = QComboBox()
+        for label, code in platform_options():
+            self.download_platform.addItem(label, code)
+        self.download_platform.setCurrentIndex(0)
+        form.addRow("平台", self.download_platform)
 
         dir_row = QHBoxLayout()
         self.download_dir = QLineEdit(str(Path.home() / "Downloads" / "VideoBridge"))
@@ -142,14 +149,21 @@ class MainWindow(QMainWindow):
         if not output_dir:
             QMessageBox.warning(self, "提示", "请选择输出目录")
             return
-        self._start(self.btn_download, self._task_download, url, output_dir)
+        platform = self.download_platform.currentData() or "auto"
+        self._start(self.btn_download, self._task_download, url, output_dir, platform)
 
-    def _task_download(self, button, url: str, output_dir: str):
+    def _task_download(self, button, url: str, output_dir: str, platform: str):
         try:
             self._log(f"开始下载: {url}")
             bins = BinaryPaths.detect()
             os.makedirs(output_dir, exist_ok=True)
-            result = download_video(url, output_dir, binaries=bins, on_line=self._log)
+            result = download_video(
+                url,
+                output_dir,
+                platform=None if platform == "auto" else platform,
+                binaries=bins,
+                on_line=self._log,
+            )
             self._log(f"下载完成: {result.filepath}")
         except Exception as exc:
             self._log(f"[下载失败] {exc}")
