@@ -39,6 +39,7 @@ from ..core.downloader import download_video
 from ..core.douyin_cookie import fetch_douyin_cookies
 from ..core.douyin_login import douyin_login
 from ..core.audio8 import is_audio8_available, text_to_speech_audio8
+from ..core.audio8_bootstrap import ensure_audio8_ready
 from ..core.dubbing import replace_video_audio
 from ..core.model_downloader import download_model
 from ..core.platforms import detect_platform, extract_video_url, platform_options
@@ -911,9 +912,6 @@ class MainWindow(QMainWindow):
             return
         audio8_url = self.dub_audio8_url.text().strip() or "http://127.0.0.1:8024"
         audio8_voice = self.dub_audio8_voice.text().strip()
-        if not is_audio8_available(audio8_url):
-            QMessageBox.warning(self, "提示", "未检测到 Audio8 本地服务，请先启动 Audio8 ONNX Runtime 服务")
-            return
         self._start(
             self.btn_dub,
             self._task_dub,
@@ -935,6 +933,12 @@ class MainWindow(QMainWindow):
     ):
         tmp_audio = None
         try:
+            if not is_audio8_available(audio8_url):
+                if audio8_url.rstrip("/") == "http://127.0.0.1:8024":
+                    self._log("Audio8 本地服务未启动，首次使用将自动下载模型并启动...")
+                    audio8_url = ensure_audio8_ready(on_status=self._log)
+                else:
+                    raise RuntimeError("Audio8 远程服务不可用，请检查服务地址")
             self._log(f"开始 Audio8 配音: {audio8_url}")
             if video:
                 tmp_audio = output + ".dub_tmp.wav"
