@@ -5,7 +5,6 @@ description = "macOS 本地视频搬运/字幕/去重桌面 MVP"
 requires-python = ">=3.12"
 dependencies = [
     "PySide6-Essentials>=6.7",
-    "piper-tts>=1.8",
     "playwright>=1.40",
 ]
 

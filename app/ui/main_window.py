@@ -39,7 +39,7 @@ from ..core.downloader import download_video
 from ..core.douyin_cookie import fetch_douyin_cookies
 from ..core.douyin_login import douyin_login
 from ..core.audio8 import is_audio8_available, text_to_speech_audio8
-from ..core.dubbing import RATES, replace_video_audio, text_to_speech, voice_options
+from ..core.dubbing import replace_video_audio
 from ..core.model_downloader import download_model
 from ..core.platforms import detect_platform, extract_video_url, platform_options
 from ..core.subtitle import burn_subtitles, extract_subtitle_text, generate_srt
@@ -812,44 +812,23 @@ class MainWindow(QMainWindow):
         video_row.addWidget(btn_video)
         form.addRow("替换视频原声", video_row)
 
-        self.dub_engine = QComboBox()
-        self.dub_engine.addItem("Piper（本地轻量）", "piper")
-        self.dub_engine.addItem("Audio8（高质量，需本地服务）", "audio8")
-        self.dub_engine.currentIndexChanged.connect(self._update_dub_engine_ui)
-        form.addRow("配音引擎", self.dub_engine)
-
-        self.audio8_options_widget = QWidget()
-        audio8_layout = QVBoxLayout(self.audio8_options_widget)
-        audio8_layout.setContentsMargins(0, 0, 0, 0)
         url_row = QHBoxLayout()
         self.dub_audio8_url = QLineEdit("http://127.0.0.1:8024")
         url_row.addWidget(QLabel("服务地址"))
         url_row.addWidget(self.dub_audio8_url, 1)
-        audio8_layout.addLayout(url_row)
+        form.addRow("Audio8 服务", url_row)
+
         voice_row = QHBoxLayout()
         self.dub_audio8_voice = QLineEdit()
         self.dub_audio8_voice.setPlaceholderText("可选：已注册的音色名称，例如 speaker_a")
         voice_row.addWidget(QLabel("音色"))
         voice_row.addWidget(self.dub_audio8_voice, 1)
-        audio8_layout.addLayout(voice_row)
-        self.audio8_options_widget.hide()
-        form.addRow("", self.audio8_options_widget)
+        form.addRow("Audio8 音色", voice_row)
 
         self.dub_text = QTextEdit()
         self.dub_text.setPlaceholderText("输入需要配音的文字，例如字幕内容、旁白或解说词…")
         self.dub_text.setMinimumHeight(120)
         form.addRow("配音文本", self.dub_text)
-
-        self.dub_voice = QComboBox()
-        for label, code in voice_options():
-            self.dub_voice.addItem(label, code)
-        self.dub_voice.setCurrentIndex(0)
-        form.addRow("配音音色", self.dub_voice)
-
-        self.dub_rate = QComboBox()
-        self.dub_rate.addItems(RATES)
-        self.dub_rate.setCurrentText("+0%")
-        form.addRow("语速", self.dub_rate)
 
         out_row = QHBoxLayout()
         self.dub_output = QLineEdit(str(Path.home() / "Downloads" / "VideoBridge" / "dub.mp3"))
@@ -917,14 +896,6 @@ class MainWindow(QMainWindow):
         if f:
             self.dub_output.setText(f)
 
-    def _update_dub_engine_ui(self):
-        is_audio8 = self.dub_engine.currentData() == "audio8"
-        self.audio8_options_widget.setVisible(is_audio8)
-        self.dub_voice.setEnabled(not is_audio8)
-        self.dub_rate.setEnabled(not is_audio8)
-        if is_audio8 and not is_audio8_available(self.dub_audio8_url.text().strip()):
-            self._log("未检测到 Audio8 本地服务，请先启动 Audio8_TTS/onnx_runtime/start_server.sh")
-
     def _run_dub(self):
         text = self.dub_text.toPlainText().strip()
         output = self.dub_output.text().strip()
@@ -934,16 +905,13 @@ class MainWindow(QMainWindow):
         if not output:
             QMessageBox.warning(self, "提示", "请选择音频保存位置")
             return
-        voice = self.dub_voice.currentData() or "zh-CN-XiaoxiaoNeural"
-        rate = self.dub_rate.currentText() or "+0%"
         video = self.dub_video_file.text().strip()
         if video and not os.path.isfile(video):
             QMessageBox.warning(self, "提示", "视频文件不存在")
             return
-        engine = self.dub_engine.currentData() or "piper"
         audio8_url = self.dub_audio8_url.text().strip() or "http://127.0.0.1:8024"
         audio8_voice = self.dub_audio8_voice.text().strip()
-        if engine == "audio8" and not is_audio8_available(audio8_url):
+        if not is_audio8_available(audio8_url):
             QMessageBox.warning(self, "提示", "未检测到 Audio8 本地服务，请先启动 Audio8 ONNX Runtime 服务")
             return
         self._start(
@@ -951,10 +919,7 @@ class MainWindow(QMainWindow):
             self._task_dub,
             text,
             output,
-            voice,
-            rate,
             video,
-            engine,
             audio8_url,
             audio8_voice,
         )
@@ -964,35 +929,22 @@ class MainWindow(QMainWindow):
         button,
         text: str,
         output: str,
-        voice: str,
-        rate: str,
         video: str,
-        engine: str,
         audio8_url: str,
         audio8_voice: str,
     ):
         tmp_audio = None
         try:
-            if engine == "audio8":
-                self._log(f"开始 Audio8 配音: {audio8_url}")
-            else:
-                self._log(f"开始 Piper 配音: {voice} / {rate}")
-
+            self._log(f"开始 Audio8 配音: {audio8_url}")
             if video:
-                tmp_audio = output + ".dub_tmp" + (".wav" if engine == "audio8" else ".mp3")
-                if engine == "audio8":
-                    text_to_speech_audio8(text, tmp_audio, base_url=audio8_url, voice_name=audio8_voice, on_status=self._log)
-                else:
-                    text_to_speech(text, tmp_audio, voice=voice, rate=rate, on_status=self._log)
+                tmp_audio = output + ".dub_tmp.wav"
+                text_to_speech_audio8(text, tmp_audio, base_url=audio8_url, voice_name=audio8_voice, on_status=self._log)
                 stem = os.path.splitext(os.path.basename(video))[0]
                 out_video = os.path.join(os.path.dirname(os.path.abspath(video)), f"{stem}.dubbed.mp4")
                 replace_video_audio(video, tmp_audio, out_video, on_status=self._log)
                 self._log(f"配音视频完成: {out_video}")
             else:
-                if engine == "audio8":
-                    text_to_speech_audio8(text, output, base_url=audio8_url, voice_name=audio8_voice, on_status=self._log)
-                else:
-                    text_to_speech(text, output, voice=voice, rate=rate, on_status=self._log)
+                text_to_speech_audio8(text, output, base_url=audio8_url, voice_name=audio8_voice, on_status=self._log)
                 self._log(f"配音完成: {output}")
         except Exception as exc:
             self._log(f"[配音失败] {exc}")
