@@ -38,7 +38,7 @@ from ..core.dedup_advanced import add_background_music, dedup_frame_mix, dedup_p
 from ..core.downloader import download_video
 from ..core.douyin_cookie import fetch_douyin_cookies
 from ..core.douyin_login import douyin_login
-from ..core.dubbing import RATES, text_to_speech, voice_options
+from ..core.dubbing import RATES, replace_video_audio, text_to_speech, voice_options
 from ..core.model_downloader import download_model
 from ..core.platforms import detect_platform, extract_video_url, platform_options
 from ..core.subtitle import burn_subtitles, generate_srt
@@ -82,9 +82,9 @@ class MainWindow(QMainWindow):
 
         self.tabs = QTabWidget()
         self.tabs.addTab(self._build_download_tab(), "下载")
-        self.tabs.addTab(self._build_subtitle_tab(), "字幕")
         self.tabs.addTab(self._build_dedup_tab(), "去重")
         self.tabs.addTab(self._build_dub_tab(), "配音")
+        self.tabs.addTab(self._build_subtitle_tab(), "字幕")
         layout.addWidget(self.tabs, 1)
 
         self.progress = QProgressBar()
@@ -784,6 +784,16 @@ class MainWindow(QMainWindow):
         outer.addWidget(group)
         outer.addStretch(1)
 
+        video_row = QHBoxLayout()
+        self.dub_video_file = QLineEdit()
+        self.dub_video_file.setPlaceholderText("可选：选择视频，将原声替换为配音")
+        btn_video = QPushButton("选择视频")
+        btn_video.setProperty("secondary", True)
+        btn_video.clicked.connect(self._pick_dub_video_file)
+        video_row.addWidget(self.dub_video_file, 1)
+        video_row.addWidget(btn_video)
+        form.addRow("替换视频原声", video_row)
+
         self.dub_text = QTextEdit()
         self.dub_text.setPlaceholderText("输入需要配音的文字，例如字幕内容、旁白或解说词…")
         self.dub_text.setMinimumHeight(120)
@@ -814,6 +824,16 @@ class MainWindow(QMainWindow):
         form.addRow("", self.btn_dub)
         return page
 
+    def _pick_dub_video_file(self):
+        f, _ = QFileDialog.getOpenFileName(
+            self,
+            "选择要替换原声的视频",
+            str(Path.home()),
+            "Video (*.mp4 *.mov *.mkv *.webm *.flv *.avi)",
+        )
+        if f:
+            self.dub_video_file.setText(f)
+
     def _pick_dub_output(self):
         f, _ = QFileDialog.getSaveFileName(
             self,
@@ -835,16 +855,34 @@ class MainWindow(QMainWindow):
             return
         voice = self.dub_voice.currentData() or "zh-CN-XiaoxiaoNeural"
         rate = self.dub_rate.currentText() or "+0%"
-        self._start(self.btn_dub, self._task_dub, text, output, voice, rate)
+        video = self.dub_video_file.text().strip()
+        if video and not os.path.isfile(video):
+            QMessageBox.warning(self, "提示", "视频文件不存在")
+            return
+        self._start(self.btn_dub, self._task_dub, text, output, voice, rate, video)
 
-    def _task_dub(self, button, text: str, output: str, voice: str, rate: str):
+    def _task_dub(self, button, text: str, output: str, voice: str, rate: str, video: str):
+        tmp_audio = None
         try:
             self._log(f"开始生成配音: {voice} / {rate}")
-            text_to_speech(text, output, voice=voice, rate=rate, on_status=self._log)
-            self._log(f"配音完成: {output}")
+            if video:
+                tmp_audio = output + ".dub_tmp.mp3"
+                text_to_speech(text, tmp_audio, voice=voice, rate=rate, on_status=self._log)
+                stem = os.path.splitext(os.path.basename(video))[0]
+                out_video = os.path.join(os.path.dirname(os.path.abspath(video)), f"{stem}.dubbed.mp4")
+                replace_video_audio(video, tmp_audio, out_video, on_status=self._log)
+                self._log(f"配音视频完成: {out_video}")
+            else:
+                text_to_speech(text, output, voice=voice, rate=rate, on_status=self._log)
+                self._log(f"配音完成: {output}")
         except Exception as exc:
             self._log(f"[配音失败] {exc}")
         finally:
+            if tmp_audio and os.path.exists(tmp_audio):
+                try:
+                    os.remove(tmp_audio)
+                except OSError:
+                    pass
             self.task_finished.emit(button)
 
     # ---------- 通用 ----------
