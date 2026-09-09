@@ -5,6 +5,7 @@ description = "macOS 本地视频搬运/字幕/去重桌面 MVP"
 requires-python = ">=3.12"
 dependencies = [
     "PySide6-Essentials>=6.7",
+    "edge-tts>=6.1",
 ]
 
 [project.optional-dependencies]

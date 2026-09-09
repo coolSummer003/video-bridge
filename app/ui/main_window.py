@@ -27,6 +27,7 @@ from PySide6.QtWidgets import (
     QScrollArea,
     QSpinBox,
     QTabWidget,
+    QTextEdit,
     QVBoxLayout,
     QWidget,
 )
@@ -35,6 +36,7 @@ from ..core.config import BinaryPaths
 from ..core.dedup import DedupOptions, dedup_video, options_from_strength
 from ..core.dedup_advanced import add_background_music, dedup_frame_mix, dedup_pip, dedup_random_segments
 from ..core.downloader import download_video
+from ..core.dubbing import RATES, text_to_speech, voice_options
 from ..core.model_downloader import download_model
 from ..core.subtitle import burn_subtitles, generate_srt
 
@@ -76,6 +78,7 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(self._build_download_tab(), "下载")
         self.tabs.addTab(self._build_subtitle_tab(), "字幕")
         self.tabs.addTab(self._build_dedup_tab(), "去重")
+        self.tabs.addTab(self._build_dub_tab(), "配音")
         layout.addWidget(self.tabs, 1)
 
         self.progress = QProgressBar()
@@ -663,6 +666,82 @@ class MainWindow(QMainWindow):
                         pass
         except Exception as exc:
             self._log(f"[去重失败] {exc}")
+        finally:
+            self.task_finished.emit(button)
+
+    # ---------- 配音模块 ----------
+    def _build_dub_tab(self) -> QWidget:
+        page = QWidget()
+        outer = QVBoxLayout(page)
+        outer.setContentsMargins(4, 8, 4, 4)
+        group = QGroupBox("配音")
+        form = QFormLayout(group)
+        form.setContentsMargins(20, 30, 20, 20)
+        form.setHorizontalSpacing(16)
+        form.setVerticalSpacing(12)
+        outer.addWidget(group)
+        outer.addStretch(1)
+
+        self.dub_text = QTextEdit()
+        self.dub_text.setPlaceholderText("输入需要配音的文字，例如字幕内容、旁白或解说词…")
+        self.dub_text.setMinimumHeight(120)
+        form.addRow("配音文本", self.dub_text)
+
+        self.dub_voice = QComboBox()
+        for label, code in voice_options():
+            self.dub_voice.addItem(label, code)
+        self.dub_voice.setCurrentIndex(0)
+        form.addRow("配音音色", self.dub_voice)
+
+        self.dub_rate = QComboBox()
+        self.dub_rate.addItems(RATES)
+        self.dub_rate.setCurrentText("+0%")
+        form.addRow("语速", self.dub_rate)
+
+        out_row = QHBoxLayout()
+        self.dub_output = QLineEdit(str(Path.home() / "Downloads" / "VideoBridge" / "dub.mp3"))
+        btn_save = QPushButton("选择保存位置")
+        btn_save.setProperty("secondary", True)
+        btn_save.clicked.connect(self._pick_dub_output)
+        out_row.addWidget(self.dub_output, 1)
+        out_row.addWidget(btn_save)
+        form.addRow("输出音频", out_row)
+
+        self.btn_dub = QPushButton("生成配音")
+        self.btn_dub.clicked.connect(self._run_dub)
+        form.addRow("", self.btn_dub)
+        return page
+
+    def _pick_dub_output(self):
+        f, _ = QFileDialog.getSaveFileName(
+            self,
+            "保存配音",
+            self.dub_output.text().strip() or str(Path.home() / "Downloads" / "VideoBridge" / "dub.mp3"),
+            "Audio (*.mp3)",
+        )
+        if f:
+            self.dub_output.setText(f)
+
+    def _run_dub(self):
+        text = self.dub_text.toPlainText().strip()
+        output = self.dub_output.text().strip()
+        if not text:
+            QMessageBox.warning(self, "提示", "请输入需要配音的文字")
+            return
+        if not output:
+            QMessageBox.warning(self, "提示", "请选择音频保存位置")
+            return
+        voice = self.dub_voice.currentData() or "zh-CN-XiaoxiaoNeural"
+        rate = self.dub_rate.currentText() or "+0%"
+        self._start(self.btn_dub, self._task_dub, text, output, voice, rate)
+
+    def _task_dub(self, button, text: str, output: str, voice: str, rate: str):
+        try:
+            self._log(f"开始生成配音: {voice} / {rate}")
+            text_to_speech(text, output, voice=voice, rate=rate, on_status=self._log)
+            self._log(f"配音完成: {output}")
+        except Exception as exc:
+            self._log(f"[配音失败] {exc}")
         finally:
             self.task_finished.emit(button)
 
