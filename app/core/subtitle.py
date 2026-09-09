@@ -187,3 +187,19 @@ def burn_subtitles(
             except OSError:
                 pass
 
+
+def extract_subtitle_text(srt_path: str) -> str:
+    """从 SRT 字幕文件中提取纯文本内容，去掉序号和时间轴。"""
+    lines = []
+    with open(srt_path, "r", encoding="utf-8-sig", errors="replace") as f:
+        for raw in f:
+            line = raw.strip()
+            if not line:
+                continue
+            if line.isdigit():
+                continue
+            if "-->" in line:
+                continue
+            lines.append(line)
+    return "\n".join(lines).strip()
+

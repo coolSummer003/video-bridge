@@ -41,7 +41,7 @@ from ..core.douyin_login import douyin_login
 from ..core.dubbing import RATES, replace_video_audio, text_to_speech, voice_options
 from ..core.model_downloader import download_model
 from ..core.platforms import detect_platform, extract_video_url, platform_options
-from ..core.subtitle import burn_subtitles, generate_srt
+from ..core.subtitle import burn_subtitles, extract_subtitle_text, generate_srt
 
 
 class MainWindow(QMainWindow):
@@ -51,6 +51,7 @@ class MainWindow(QMainWindow):
     model_ready = Signal(str)
     model_finished = Signal()
     douyin_login_done = Signal(str)
+    subtitle_srt_ready = Signal(str)
 
     def __init__(self):
         super().__init__()
@@ -63,6 +64,7 @@ class MainWindow(QMainWindow):
         self.model_ready.connect(self._on_model_ready)
         self.model_finished.connect(self._on_model_finished)
         self.douyin_login_done.connect(self._on_douyin_login_done)
+        self.subtitle_srt_ready.connect(self._on_subtitle_srt_ready)
         self._douyin_cookie_path: str | None = None
         self._build_ui()
         self._init_model_state()
@@ -83,8 +85,8 @@ class MainWindow(QMainWindow):
         self.tabs = QTabWidget()
         self.tabs.addTab(self._build_download_tab(), "下载")
         self.tabs.addTab(self._build_dedup_tab(), "去重")
-        self.tabs.addTab(self._build_dub_tab(), "配音")
         self.tabs.addTab(self._build_subtitle_tab(), "字幕")
+        self.tabs.addTab(self._build_dub_tab(), "配音")
         layout.addWidget(self.tabs, 1)
 
         self.progress = QProgressBar()
@@ -450,6 +452,7 @@ class MainWindow(QMainWindow):
                 on_line=self._log,
             )
             self._log(f"字幕完成: {srt}")
+            self.subtitle_srt_ready.emit(srt)
             if burn:
                 stem = os.path.splitext(os.path.basename(video))[0]
                 burned = os.path.join(output_dir, f"{stem}.subbed.mp4")
@@ -784,6 +787,20 @@ class MainWindow(QMainWindow):
         outer.addWidget(group)
         outer.addStretch(1)
 
+        srt_row = QHBoxLayout()
+        self.dub_srt_file = QLineEdit()
+        self.dub_srt_file.setPlaceholderText("自动载入生成的字幕，也可手动选择 SRT")
+        btn_srt = QPushButton("选择 SRT")
+        btn_srt.setProperty("secondary", True)
+        btn_srt.clicked.connect(self._pick_dub_srt)
+        btn_load_srt = QPushButton("载入字幕文本")
+        btn_load_srt.setProperty("secondary", True)
+        btn_load_srt.clicked.connect(self._load_srt_text)
+        srt_row.addWidget(self.dub_srt_file, 1)
+        srt_row.addWidget(btn_srt)
+        srt_row.addWidget(btn_load_srt)
+        form.addRow("字幕文件", srt_row)
+
         video_row = QHBoxLayout()
         self.dub_video_file = QLineEdit()
         self.dub_video_file.setPlaceholderText("可选：选择视频，将原声替换为配音")
@@ -823,6 +840,38 @@ class MainWindow(QMainWindow):
         self.btn_dub.clicked.connect(self._run_dub)
         form.addRow("", self.btn_dub)
         return page
+
+    def _pick_dub_srt(self):
+        f, _ = QFileDialog.getOpenFileName(
+            self,
+            "选择字幕文件",
+            str(Path.home()),
+            "Subtitle (*.srt);;All files (*)",
+        )
+        if f:
+            self.dub_srt_file.setText(f)
+            self._load_srt_text()
+
+    def _load_srt_text(self):
+        srt = self.dub_srt_file.text().strip()
+        if not srt or not os.path.isfile(srt):
+            QMessageBox.warning(self, "提示", "字幕文件不存在")
+            return
+        try:
+            text = extract_subtitle_text(srt)
+            self.dub_text.setPlainText(text)
+            self._log(f"已载入字幕文本，共 {len(text)} 字")
+        except Exception as exc:
+            self._log(f"[载入字幕失败] {exc}")
+
+    def _on_subtitle_srt_ready(self, srt_path: str):
+        self.dub_srt_file.setText(srt_path)
+        try:
+            text = extract_subtitle_text(srt_path)
+            self.dub_text.setPlainText(text)
+            self._log("字幕已生成，并已自动作为配音文本")
+        except Exception as exc:
+            self._log(f"[自动载入字幕失败] {exc}")
 
     def _pick_dub_video_file(self):
         f, _ = QFileDialog.getOpenFileName(
