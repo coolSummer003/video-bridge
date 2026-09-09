@@ -36,9 +36,10 @@ from ..core.config import BinaryPaths
 from ..core.dedup import DedupOptions, dedup_video, options_from_strength
 from ..core.dedup_advanced import add_background_music, dedup_frame_mix, dedup_pip, dedup_random_segments
 from ..core.downloader import download_video
+from ..core.douyin_cookie import fetch_douyin_cookies
 from ..core.dubbing import RATES, text_to_speech, voice_options
 from ..core.model_downloader import download_model
-from ..core.platforms import extract_video_url, platform_options
+from ..core.platforms import detect_platform, extract_video_url, platform_options
 from ..core.subtitle import burn_subtitles, generate_srt
 
 
@@ -217,6 +218,15 @@ class MainWindow(QMainWindow):
     ):
         try:
             self._log(f"开始下载: {url}")
+            resolved_platform = platform if platform != "auto" else detect_platform(url)
+            if resolved_platform == "douyin" and not cookies_file and not browser:
+                self._log("检测到抖音视频链接，自动获取抖音 Fresh Cookie...")
+                try:
+                    cookies_file = fetch_douyin_cookies()
+                    self._log(f"抖音 Cookie 获取完成: {cookies_file}")
+                except Exception as exc:
+                    self._log(f"[自动获取 Cookie 失败] {exc}")
+                    raise RuntimeError("自动获取抖音 Cookie 失败，请手动选择 Cookie 文件或浏览器 Cookie") from exc
             bins = BinaryPaths.detect()
             os.makedirs(output_dir, exist_ok=True)
             result = download_video(

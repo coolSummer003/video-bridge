@@ -18,3 +18,5 @@ vendor/
 *.egg-info/
 
 models/piper/
+
+models/douyin_cookies.txt
