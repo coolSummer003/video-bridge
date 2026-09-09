@@ -819,12 +819,12 @@ class MainWindow(QMainWindow):
         url_row.addWidget(self.dub_audio8_url, 1)
         form.addRow("Audio8 服务", url_row)
 
-        voice_row = QHBoxLayout()
-        self.dub_audio8_voice = QLineEdit()
-        self.dub_audio8_voice.setPlaceholderText("可选：已注册的音色名称，例如 speaker_a")
-        voice_row.addWidget(QLabel("音色"))
-        voice_row.addWidget(self.dub_audio8_voice, 1)
-        form.addRow("Audio8 音色", voice_row)
+        self.dub_audio8_voice = QComboBox()
+        self.dub_audio8_voice.setEditable(True)
+        self.dub_audio8_voice.addItem("默认音色（不指定）", "")
+        self.dub_audio8_voice.addItem("speaker_a（示例）", "speaker_a")
+        self.dub_audio8_voice.setCurrentIndex(0)
+        form.addRow("Audio8 音色", self.dub_audio8_voice)
 
         self.dub_text = QTextEdit()
         self.dub_text.setPlaceholderText("输入需要配音的文字，例如字幕内容、旁白或解说词…")
@@ -911,7 +911,15 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "提示", "视频文件不存在")
             return
         audio8_url = self.dub_audio8_url.text().strip() or "http://127.0.0.1:8024"
-        audio8_voice = self.dub_audio8_voice.text().strip()
+        audio8_voice = ""
+        if self.dub_audio8_voice.currentIndex() >= 0:
+            data = self.dub_audio8_voice.itemData(self.dub_audio8_voice.currentIndex())
+            if data:
+                audio8_voice = str(data)
+        if not audio8_voice:
+            typed = self.dub_audio8_voice.currentText().strip()
+            if typed and typed != "默认音色（不指定）":
+                audio8_voice = typed
         self._start(
             self.btn_dub,
             self._task_dub,
