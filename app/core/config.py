@@ -38,18 +38,25 @@ def _project_root() -> Path:
     return Path(__file__).resolve().parents[2]
 
 
+def _is_frozen() -> bool:
+    return getattr(sys, "frozen", False) or hasattr(sys, "_MEIPASS")
+
+
 def _bundled_dir() -> Path | None:
-    """打包态或开发态的资源二进制目录。"""
-    if hasattr(sys, "_MEIPASS"):
-        bundled = Path(sys._MEIPASS) / "resources" / "bin"
+    """仅打包态使用随包 resources/bin；开发态直接使用系统/Homebrew 二进制。"""
+    if _is_frozen():
+        if hasattr(sys, "_MEIPASS"):
+            bundled = Path(sys._MEIPASS) / "resources" / "bin"
+            if bundled.exists():
+                return bundled
+        bundled = Path(__file__).resolve().parents[3] / "resources" / "bin"
         if bundled.exists():
             return bundled
-    dev = _project_root() / "resources" / "bin"
-    return dev if dev.exists() else None
+    return None
 
 
 def _find_tool(name: str) -> str:
-    # 1. 随包/本地 resources/bin 优先
+    # 1. 打包态：优先使用随包二进制
     bundled = _bundled_dir()
     if bundled is not None:
         candidate = bundled / _exe_name(name)
@@ -62,7 +69,7 @@ def _find_tool(name: str) -> str:
         if full.is_file():
             return str(full)
 
-    # 3. PATH
+    # 3. PATH（开发态正常使用 Homebrew/system 原版）
     found = shutil.which(_exe_name(name)) or shutil.which(name)
     if not found:
         raise RuntimeError(f"找不到外部程序: {name}，请先安装或设置对应 *_PATH 环境变量")
