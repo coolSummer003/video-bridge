@@ -37,6 +37,7 @@ from ..core.dedup import DedupOptions, dedup_video, options_from_strength
 from ..core.dedup_advanced import add_background_music, dedup_frame_mix, dedup_pip, dedup_random_segments
 from ..core.downloader import download_video
 from ..core.douyin_cookie import fetch_douyin_cookies
+from ..core.douyin_login import douyin_login
 from ..core.dubbing import RATES, text_to_speech, voice_options
 from ..core.model_downloader import download_model
 from ..core.platforms import detect_platform, extract_video_url, platform_options
@@ -49,6 +50,7 @@ class MainWindow(QMainWindow):
     model_progress = Signal(int, int)
     model_ready = Signal(str)
     model_finished = Signal()
+    douyin_login_done = Signal(str)
 
     def __init__(self):
         super().__init__()
@@ -60,6 +62,7 @@ class MainWindow(QMainWindow):
         self.model_progress.connect(self._on_model_progress)
         self.model_ready.connect(self._on_model_ready)
         self.model_finished.connect(self._on_model_finished)
+        self.douyin_login_done.connect(self._on_douyin_login_done)
         self._build_ui()
         self._init_model_state()
 
@@ -140,6 +143,11 @@ class MainWindow(QMainWindow):
         cookie_row.addWidget(btn_cookie)
         form.addRow("Cookie 文件", cookie_row)
 
+        self.btn_douyin_login = QPushButton("抖音扫码登录（获取登录 Cookie）")
+        self.btn_douyin_login.setProperty("secondary", True)
+        self.btn_douyin_login.clicked.connect(self._run_douyin_login)
+        form.addRow("", self.btn_douyin_login)
+
         dir_row = QHBoxLayout()
         self.download_dir = QLineEdit(str(Path.home() / "Downloads" / "VideoBridge"))
         btn = QPushButton("选择目录")
@@ -172,6 +180,25 @@ class MainWindow(QMainWindow):
         )
         if f:
             self.download_cookies_file.setText(f)
+
+    def _run_douyin_login(self):
+        self.btn_douyin_login.setEnabled(False)
+        self._log("打开抖音扫码登录窗口，请使用手机抖音扫码...")
+        thread = threading.Thread(target=self._task_douyin_login, daemon=True)
+        thread.start()
+
+    def _task_douyin_login(self):
+        try:
+            path = douyin_login()
+            self.douyin_login_done.emit(path)
+        except Exception as exc:
+            self._log(f"[抖音登录失败] {exc}")
+            self.task_finished.emit(self.btn_douyin_login)
+
+    def _on_douyin_login_done(self, path: str):
+        self.download_cookies_file.setText(path)
+        self._log(f"抖音登录 Cookie 已保存: {path}")
+        self.btn_douyin_login.setEnabled(True)
 
     def _refresh_download_url(self):
         text = self.download_url.toPlainText().strip()
