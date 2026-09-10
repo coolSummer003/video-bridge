@@ -38,7 +38,7 @@ from ..core.config import BinaryPaths
 from ..core.dedup import DedupOptions, dedup_video, options_from_strength
 from ..core.downloader import download_video
 from ..core.dedup_advanced import dedup_frame_mix, dedup_pip, dedup_structure_auto
-from ..core.douyin_cookie import fetch_douyin_cookies
+from ..core.douyin_browser import download_douyin_video
 from ..core.douyin_login import douyin_login
 from ..core.audio8 import is_audio8_available, list_audio8_voices, register_audio8_voice, text_to_speech_audio8
 from ..core.audio8_bootstrap import ensure_audio8_ready
@@ -154,7 +154,6 @@ class MainWindow(QMainWindow):
         douyin_row.addWidget(self.btn_douyin_login)
         douyin_row.addStretch(1)
         self.douyin_login_widget.hide()
-        form.addRow("抖音 Cookie", self.douyin_login_widget)
 
         dir_row = QHBoxLayout()
         self.download_dir = QLineEdit(str(Path.home() / "Downloads" / "VideoBridge"))
@@ -206,11 +205,6 @@ class MainWindow(QMainWindow):
             self.download_url_clean.setText(url)
         else:
             self.download_url_clean.clear()
-        self._update_douyin_login_visibility(url)
-
-    def _update_douyin_login_visibility(self, url: str | None):
-        is_douyin = bool(url and detect_platform(url) == "douyin")
-        self.douyin_login_widget.setVisible(is_douyin)
 
     def _run_download(self):
         raw_text = self.download_url.toPlainText().strip()
@@ -246,17 +240,13 @@ class MainWindow(QMainWindow):
         try:
             self._log(f"开始下载: {url}")
             resolved_platform = platform if platform != "auto" else detect_platform(url)
-            if resolved_platform == "douyin" and not cookies_file and not browser:
-                self._log("检测到抖音视频链接，自动获取抖音 Fresh Cookie...")
-                try:
-                    cookies_file = fetch_douyin_cookies()
-                    self._douyin_cookie_path = cookies_file
-                    self._log("抖音 Cookie 获取完成")
-                except Exception as exc:
-                    self._log(f"[自动获取 Cookie 失败] {exc}")
-                    raise RuntimeError("自动获取抖音 Cookie 失败，请手动选择 Cookie 文件或浏览器 Cookie") from exc
-            bins = BinaryPaths.detect()
             os.makedirs(output_dir, exist_ok=True)
+            if resolved_platform == "douyin":
+                self._log("检测到抖音视频，使用浏览器抓流下载...")
+                path = download_douyin_video(url, output_dir, on_status=self._log)
+                self._log(f"下载完成: {path}")
+                return
+            bins = BinaryPaths.detect()
             result = download_video(
                 url,
                 output_dir,

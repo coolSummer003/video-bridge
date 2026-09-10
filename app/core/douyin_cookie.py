@@ -27,6 +27,8 @@ def save_cookies_netscape(cookies: list[dict], output_path: str) -> str:
         secure = "TRUE" if c.get("secure") else "FALSE"
         include_subdomains = "TRUE" if domain.startswith(".") else "FALSE"
         expires = int(c.get("expires", 0) or 0)
+        if expires < 0:  # playwright 用 -1 表示会话 Cookie，Netscape 格式应为 0
+            expires = 0
         lines.append(f"{domain}\t{include_subdomains}\t{path}\t{secure}\t{expires}\t{name}\t{value}")
     with open(output_path, "w", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")
