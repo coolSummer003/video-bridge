@@ -40,7 +40,7 @@ from ..core.douyin_cookie import fetch_douyin_cookies
 from ..core.douyin_login import douyin_login
 from ..core.audio8 import is_audio8_available, list_audio8_voices, text_to_speech_audio8
 from ..core.audio8_bootstrap import ensure_audio8_ready
-from ..core.dubbing import replace_video_audio
+from ..core.dubbing import dub_srt_to_video, replace_video_audio
 from ..core.model_downloader import download_model
 from ..core.platforms import detect_platform, extract_video_url, platform_options
 from ..core.subtitle import burn_subtitles, extract_subtitle_text, generate_srt
@@ -926,6 +926,10 @@ class MainWindow(QMainWindow):
         if video and not os.path.isfile(video):
             QMessageBox.warning(self, "提示", "视频文件不存在")
             return
+        srt_file = self.dub_srt_file.text().strip()
+        if srt_file and not os.path.isfile(srt_file):
+            QMessageBox.warning(self, "提示", "字幕文件不存在")
+            return
         audio8_url = AUDIO8_BASE_URL
         audio8_voice = "default"
         if self.dub_audio8_voice.currentIndex() >= 0:
@@ -940,6 +944,7 @@ class MainWindow(QMainWindow):
             video,
             audio8_url,
             audio8_voice,
+            srt_file,
         )
 
     def _task_dub(
@@ -950,6 +955,7 @@ class MainWindow(QMainWindow):
         video: str,
         audio8_url: str,
         audio8_voice: str,
+        srt_file: str,
     ):
         tmp_audio = None
         try:
@@ -966,7 +972,20 @@ class MainWindow(QMainWindow):
             except Exception:
                 pass
             self._log("开始 Audio8 配音")
-            if video:
+            if video and srt_file:
+                stem = os.path.splitext(os.path.basename(video))[0]
+                out_video = os.path.join(os.path.dirname(os.path.abspath(video)), f"{stem}.dubbed.mp4")
+                self._log("检测到字幕文件，将按字幕时间轴逐句同步配音...")
+                dub_srt_to_video(
+                    srt_file,
+                    video,
+                    out_video,
+                    voice_name=audio8_voice,
+                    base_url=audio8_url,
+                    on_status=self._log,
+                )
+                self._log(f"配音视频完成: {out_video}")
+            elif video:
                 tmp_audio = output + ".dub_tmp.wav"
                 text_to_speech_audio8(text, tmp_audio, base_url=audio8_url, voice_name=audio8_voice, on_status=self._log)
                 stem = os.path.splitext(os.path.basename(video))[0]

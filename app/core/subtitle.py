@@ -2,9 +2,11 @@
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
 import tempfile
+from dataclasses import dataclass
 
 from .config import BinaryPaths
 
@@ -202,4 +204,51 @@ def extract_subtitle_text(srt_path: str) -> str:
                 continue
             lines.append(line)
     return "\n".join(lines).strip()
+
+
+@dataclass
+class SubtitleCue:
+    index: int
+    start: float
+    end: float
+    text: str
+
+
+def _parse_srt_time(value: str) -> float:
+    match = re.match(r"(\d+):(\d+):(\d+)[,\.](\d+)", value.strip())
+    if not match:
+        raise ValueError(f"invalid srt timestamp: {value}")
+    h, m, sec, ms = match.groups()
+    return int(h) * 3600 + int(m) * 60 + int(sec) + int(ms) / 1000.0
+
+
+def parse_srt(srt_path: str) -> list[SubtitleCue]:
+    """解析 SRT 为按时间排序的字幕列表。"""
+    text = open(srt_path, "r", encoding="utf-8-sig", errors="replace").read()
+    blocks = re.split(r"\n\s*\n", text.strip())
+    cues: list[SubtitleCue] = []
+    for block in blocks:
+        lines = [ln.strip() for ln in block.splitlines() if ln.strip()]
+        if len(lines) < 2:
+            continue
+        index = 0
+        if lines[0].isdigit():
+            index = int(lines[0])
+            lines = lines[1:]
+        if not lines or "-->" not in lines[0]:
+            continue
+        start_raw, end_raw = [p.strip() for p in lines[0].split("-->", 1)]
+        content = " ".join(lines[1:]).strip()
+        if not content:
+            continue
+        cues.append(
+            SubtitleCue(
+                index=index or (len(cues) + 1),
+                start=_parse_srt_time(start_raw),
+                end=_parse_srt_time(end_raw),
+                text=content,
+            )
+        )
+    cues.sort(key=lambda c: c.start)
+    return cues
 
