@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+import uuid
 import subprocess
 import tempfile
 import urllib.error
@@ -115,3 +116,75 @@ def text_to_speech_audio8(
     if on_status:
         on_status(f"Audio8 配音完成: {output_path}")
     return output_path
+
+
+def register_audio8_voice(
+    audio_path: str,
+    text: str,
+    name: str,
+    *,
+    base_url: str = "http://127.0.0.1:8024",
+    overwrite: bool = False,
+    on_status: callable | None = None,
+) -> dict:
+    """向 Audio8 服务注册一个新音色（参考音频 + 准确原文）。"""
+    text = (text or "").strip()
+    name = (name or "").strip()
+    if not text:
+        raise ValueError("参考文本不能为空")
+    if not name:
+        raise ValueError("音色名称不能为空")
+    if not os.path.isfile(audio_path):
+        raise FileNotFoundError(audio_path)
+    if not is_audio8_available(base_url):
+        raise RuntimeError("Audio8 本地服务未启动")
+
+    if on_status:
+        on_status(f"正在注册音色: {name}")
+
+    boundary = "----VideoBridgeBoundary" + uuid.uuid4().hex
+    with open(audio_path, "rb") as f:
+        audio_data = f.read()
+
+    body = bytearray()
+
+    def add_text_field(field_name: str, value: str):
+        body.extend(f"--{boundary}\r\n".encode())
+        body.extend(f'Content-Disposition: form-data; name="{field_name}"\r\n\r\n'.encode())
+        body.extend(value.encode("utf-8"))
+        body.extend(b"\r\n")
+
+    add_text_field("text", text)
+    add_text_field("name", name)
+    add_text_field("overwrite", "true" if overwrite else "false")
+
+    filename = os.path.basename(audio_path)
+    body.extend(f"--{boundary}\r\n".encode())
+    body.extend(
+        f'Content-Disposition: form-data; name="audio"; filename="{filename}"\r\n'.encode()
+    )
+    body.extend(b"Content-Type: application/octet-stream\r\n\r\n")
+    body.extend(audio_data)
+    body.extend(b"\r\n")
+    body.extend(f"--{boundary}--\r\n".encode())
+
+    req = urllib.request.Request(
+        base_url.rstrip("/") + "/api/voices/register",
+        data=bytes(body),
+        headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=300) as resp:
+            data = json.load(resp)
+    except urllib.error.HTTPError as exc:
+        try:
+            detail = exc.read().decode("utf-8", errors="replace")
+        except Exception:
+            detail = ""
+        raise RuntimeError(f"音色注册失败 HTTP {exc.code}: {detail[:500]}") from exc
+
+    if on_status:
+        on_status(f"音色注册完成: {name}")
+    return data if isinstance(data, dict) else {}
+

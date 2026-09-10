@@ -25,6 +25,9 @@ AUDIO8_MODEL_FILES = [
     "codec_decoder_fp16.onnx.data",
     "tokenizer/tokenizer.json",
     "reference_codes.npy",
+    "registration/codec_encoder_fp16.onnx",
+    "registration/codec_encoder_fp16.onnx.data",
+    "registration/registration_manifest.json",
 ]
 
 _ROOT = Path(__file__).resolve().parents[2] / "models" / "audio8"
@@ -263,8 +266,9 @@ def ensure_audio8_ready(on_status=None) -> str:
     """确保 Audio8 本地服务可用：自动下载模型并启动。"""
     url = "http://127.0.0.1:8024"
     if is_audio8_available(url):
-        # 服务已运行时，确保内置 default 音色存在
+        # 服务已运行时，补齐注册所需模型文件，并确保内置 default 音色存在
         if (_MODEL_DIR / "runtime_manifest.json").exists():
+            ensure_model_downloaded(on_status=on_status)
             ensure_default_voice(on_status=on_status)
         return url
     return start_local_service(on_status=on_status)

@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
     QFrame,
     QGroupBox,
     QHBoxLayout,
+    QInputDialog,
     QLabel,
     QLineEdit,
     QMainWindow,
@@ -38,7 +39,7 @@ from ..core.dedup_advanced import add_background_music, dedup_frame_mix, dedup_p
 from ..core.downloader import download_video
 from ..core.douyin_cookie import fetch_douyin_cookies
 from ..core.douyin_login import douyin_login
-from ..core.audio8 import is_audio8_available, list_audio8_voices, text_to_speech_audio8
+from ..core.audio8 import is_audio8_available, list_audio8_voices, register_audio8_voice, text_to_speech_audio8
 from ..core.audio8_bootstrap import ensure_audio8_ready
 from ..core.dubbing import dub_srt_to_video, replace_video_audio
 from ..core.model_downloader import download_model
@@ -818,11 +819,17 @@ class MainWindow(QMainWindow):
         video_row.addWidget(btn_video)
         form.addRow("替换视频原声", video_row)
 
+        voice_row2 = QHBoxLayout()
         self.dub_audio8_voice = QComboBox()
         self.dub_audio8_voice.setEditable(False)
         self.dub_audio8_voice.addItem("默认音色（内置）", "default")
         self.dub_audio8_voice.setCurrentIndex(0)
-        form.addRow("音色", self.dub_audio8_voice)
+        self.btn_register_voice = QPushButton("注册新音色")
+        self.btn_register_voice.setProperty("secondary", True)
+        self.btn_register_voice.clicked.connect(self._run_register_voice)
+        voice_row2.addWidget(self.dub_audio8_voice, 1)
+        voice_row2.addWidget(self.btn_register_voice)
+        form.addRow("音色", voice_row2)
 
         self.dub_text = QTextEdit()
         self.dub_text.setPlaceholderText("输入需要配音的文字，例如字幕内容、旁白或解说词…")
@@ -894,6 +901,52 @@ class MainWindow(QMainWindow):
         )
         if f:
             self.dub_output.setText(f)
+
+    def _run_register_voice(self):
+        audio, _ = QFileDialog.getOpenFileName(
+            self,
+            "选择参考音频（0.5~30 秒，清晰人声）",
+            str(Path.home()),
+            "Audio (*.wav *.mp3 *.m4a *.flac *.aac *.ogg)",
+        )
+        if not audio:
+            return
+        text, ok = QInputDialog.getText(
+            self,
+            "参考文本",
+            "请输入这段音频中准确说出的文字（必须与音频一致）：",
+        )
+        if not ok or not text.strip():
+            return
+        name, ok = QInputDialog.getText(
+            self,
+            "音色名称",
+            "请输入音色名称（英文/数字，最多 64 字符）：",
+        )
+        if not ok or not name.strip():
+            return
+        self._start(self.btn_register_voice, self._task_register_voice, audio, text.strip(), name.strip())
+
+    def _task_register_voice(self, button, audio: str, text: str, name: str):
+        try:
+            self._log("正在准备配音服务...")
+            url = ensure_audio8_ready(on_status=self._log)
+            register_audio8_voice(
+                audio,
+                text,
+                name,
+                base_url=url,
+                overwrite=True,
+                on_status=self._log,
+            )
+            voices = list_audio8_voices(url)
+            if voices:
+                self.audio8_voices_ready.emit(voices)
+            self._log("音色注册成功，可在音色下拉框中选择")
+        except Exception as exc:
+            self._log(f"[音色注册失败] {exc}")
+        finally:
+            self.task_finished.emit(button)
 
     def _on_audio8_voices_ready(self, voices: object):
         names = []
