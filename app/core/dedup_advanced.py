@@ -321,10 +321,20 @@ def dedup_pip(
     bins = binaries or BinaryPaths.detect()
     if not 0.0 < opacity <= 0.10:
         raise ValueError("opacity 必须在 (0, 0.10] 之间")
+    info = probe_video(video_path, bins.ffprobe)
+    width = int(info.get("width") or 0)
+    height = int(info.get("height") or 0)
+    if width <= 0 or height <= 0:
+        raise RuntimeError("无法读取视频尺寸，不能进行隐形混合")
+    width -= width % 2
+    height -= height % 2
+    fps = int(info.get("fps") or 30)
     os.makedirs(os.path.dirname(os.path.abspath(output_path)) or ".", exist_ok=True)
+    # blend 要求两路分辨率/格式/SAR/帧率完全一致，先把 B 严格对齐到 A
     filter_complex = (
-        f"[0:v]format=yuv420p[base];"
-        f"[1:v]scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p[ov0];"
+        f"[0:v]scale={width}:{height},setsar=1,fps={fps},format=yuv420p[base];"
+        f"[1:v]scale={width}:{height}:force_original_aspect_ratio=increase,"
+        f"crop={width}:{height},setsar=1,fps={fps},format=yuv420p[ov0];"
         f"[base][ov0]blend=all_mode=normal:all_opacity={opacity:.4f},format=yuv420p[vout]"
     )
     cmd = [
