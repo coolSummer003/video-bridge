@@ -91,11 +91,11 @@ def dedup_frame_mix(
     duration = info["duration"] or 0
 
     filter_complex = (
-        f"[0:v]fps={con_fps},setpts=PTS-STARTPTS[v0];"
+        f"[0:v]fps={con_fps},setsar=1,setpts=PTS-STARTPTS,format=yuv420p[v0];"
         f"[1:v]scale={width}:{height}:force_original_aspect_ratio=increase,"
-        f"crop={width}:{height},fps={mat_fps},setpts=PTS-STARTPTS,"
-        f"trim=duration={duration:.3f},setpts=PTS-STARTPTS[v1];"
-        f"[v0][v1]interleave=2[vout]"
+        f"crop={width}:{height},fps={mat_fps},setsar=1,setpts=PTS-STARTPTS,"
+        f"format=yuv420p,trim=duration={duration:.3f},setpts=PTS-STARTPTS[v1];"
+        f"[v0][v1]interleave=2,format=yuv420p[vout]"
     )
     os.makedirs(os.path.dirname(os.path.abspath(output_path)) or ".", exist_ok=True)
     cmd = [
