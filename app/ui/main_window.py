@@ -26,6 +26,7 @@ from PySide6.QtWidgets import (
     QProgressBar,
     QPushButton,
     QScrollArea,
+    QSlider,
     QSpinBox,
     QTabWidget,
     QTextEdit,
@@ -563,7 +564,7 @@ class MainWindow(QMainWindow):
 
         stealth_row = QHBoxLayout()
         self.dedup_mix_file = QLineEdit()
-        self.dedup_mix_file.setPlaceholderText("可选：素材 B 视频（抽帧混合 + 3% 隐形混合）")
+        self.dedup_mix_file.setPlaceholderText("可选：素材 B 视频（抽帧混合 + 画中画隐形混合）")
         btn_mix = QPushButton("选择素材")
         btn_mix.setProperty("secondary", True)
         btn_mix.clicked.connect(self._pick_stealth_mix_file)
@@ -571,9 +572,22 @@ class MainWindow(QMainWindow):
         stealth_row.addWidget(btn_mix)
         form.addRow("隐形素材", stealth_row)
 
-        self.dedup_stealth = QCheckBox("隐形二创（抽帧混合 + 3% 混合，视觉几乎无变化）")
+        self.dedup_stealth = QCheckBox("隐形二创（抽帧混合 + 画中画混合，视觉几乎无变化）")
         self.dedup_stealth.setChecked(True)
         form.addRow("", self.dedup_stealth)
+
+        pip_op_row = QHBoxLayout()
+        self.dedup_pip_opacity = QSlider(Qt.Orientation.Horizontal)
+        self.dedup_pip_opacity.setRange(1, 7)
+        self.dedup_pip_opacity.setSingleStep(1)
+        self.dedup_pip_opacity.setValue(3)
+        self.dedup_pip_opacity.setTickPosition(QSlider.TickPosition.TicksBelow)
+        self.dedup_pip_opacity.setTickInterval(1)
+        self.dedup_pip_opacity.valueChanged.connect(self._update_pip_opacity_label)
+        self.dedup_pip_opacity_label = QLabel("画中画透明度：3%（视觉不可见）")
+        pip_op_row.addWidget(self.dedup_pip_opacity, 1)
+        pip_op_row.addWidget(self.dedup_pip_opacity_label)
+        form.addRow("画中画设置", pip_op_row)
 
         self.btn_dedup = QPushButton("开始去重")
         self.btn_dedup.clicked.connect(self._run_dedup)
@@ -594,6 +608,13 @@ class MainWindow(QMainWindow):
         d = QFileDialog.getExistingDirectory(self, "选择输出目录")
         if d:
             self.dedup_dir.setText(d)
+
+    def _update_pip_opacity_label(self, value: int):
+        if value <= 5:
+            hint = "视觉不可见"
+        else:
+            hint = "可能有轻微叠影"
+        self.dedup_pip_opacity_label.setText(f"画中画透明度：{value}%（{hint}）")
 
     def _pick_stealth_mix_file(self):
         f, _ = QFileDialog.getOpenFileName(
@@ -627,15 +648,16 @@ class MainWindow(QMainWindow):
         struct = self.dedup_struct.isChecked()
         mix_file = self.dedup_mix_file.text().strip()
         stealth = self.dedup_stealth.isChecked()
+        pip_opacity = self.dedup_pip_opacity.value() / 100.0
         if mix_file and not os.path.isfile(mix_file):
             QMessageBox.warning(self, "提示", "隐形素材文件不存在")
             return
         if mix_file and not stealth:
             QMessageBox.warning(self, "提示", "已选择素材但未开启隐形二创")
             return
-        self._start(self.btn_dedup, self._task_dedup, video, output_dir, opts, struct, mix_file, stealth)
+        self._start(self.btn_dedup, self._task_dedup, video, output_dir, opts, struct, mix_file, stealth, pip_opacity)
 
-    def _task_dedup(self, button, video: str, output_dir: str, opts: DedupOptions, struct: bool, mix_file: str, stealth: bool):
+    def _task_dedup(self, button, video: str, output_dir: str, opts: DedupOptions, struct: bool, mix_file: str, stealth: bool, pip_opacity: float):
         try:
             self._log(f"开始去重/二创: {video}")
             bins = BinaryPaths.detect()
@@ -650,12 +672,12 @@ class MainWindow(QMainWindow):
             if stealth and mix_file:
                 # 7:1 抽帧混合：B 帧每 8 帧出现 1 次（约 4ms），几乎不可感知
                 mix_out = os.path.join(output_dir, f".{stem}.mix.mp4")
-                self._log("使用隐形二创模式（7:1 抽帧混合 + 3% 隐形混合）…")
+                self._log(f"使用隐形二创模式（7:1 抽帧混合 + {int(pip_opacity * 100)}% 画中画混合）…")
                 dedup_frame_mix(current, mix_file, mix_out, ratio=7, binaries=bins, on_line=self._log)
                 current = mix_out
-                # 全屏 3% 隐形混合：逐像素轻微扰动
+                # 全屏画中画隐形混合：逐像素轻微扰动
                 pip_out = os.path.join(output_dir, f".{stem}.pip.mp4")
-                dedup_pip(current, mix_file, pip_out, opacity=0.03, binaries=bins, on_line=self._log)
+                dedup_pip(current, mix_file, pip_out, opacity=pip_opacity, binaries=bins, on_line=self._log)
                 current = pip_out
                 self._log("隐形二创完成")
             elif mix_file:
