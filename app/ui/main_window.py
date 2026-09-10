@@ -616,6 +616,16 @@ class MainWindow(QMainWindow):
             hint = "可能有轻微叠影"
         self.dedup_pip_opacity_label.setText(f"画中画透明度：{value}%（{hint}）")
 
+    def _check_mix_file(self, mix_file: str) -> bool:
+        """校验素材 B：必须是有视频流的视频文件（音频/PDF/图片都不行）。"""
+        if not mix_file or not os.path.isfile(mix_file):
+            QMessageBox.warning(self, "提示", "隐形素材文件不存在")
+            return False
+        if mix_file.lower().endswith((".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg", ".pdf", ".jpg", ".jpeg", ".png", ".webp", ".gif")):
+            QMessageBox.warning(self, "提示", "隐形素材必须是视频文件（MP4 等），音频和图片不能用")
+            return False
+        return True
+
     def _pick_stealth_mix_file(self):
         f, _ = QFileDialog.getOpenFileName(
             self,
@@ -648,13 +658,12 @@ class MainWindow(QMainWindow):
         struct = self.dedup_struct.isChecked()
         mix_file = self.dedup_mix_file.text().strip()
         stealth = self.dedup_stealth.isChecked()
-        pip_opacity = self.dedup_pip_opacity.value() / 100.0
-        if mix_file and not os.path.isfile(mix_file):
-            QMessageBox.warning(self, "提示", "隐形素材文件不存在")
+        if mix_file and not self._check_mix_file(mix_file):
             return
         if mix_file and not stealth:
             QMessageBox.warning(self, "提示", "已选择素材但未开启隐形二创")
             return
+        pip_opacity = self.dedup_pip_opacity.value() / 100.0
         self._start(self.btn_dedup, self._task_dedup, video, output_dir, opts, struct, mix_file, stealth, pip_opacity)
 
     def _task_dedup(self, button, video: str, output_dir: str, opts: DedupOptions, struct: bool, mix_file: str, stealth: bool, pip_opacity: float):

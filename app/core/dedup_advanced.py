@@ -130,22 +130,24 @@ def dedup_frame_mix(
         "+faststart",
         output_path,
     ]
-    proc = subprocess.Popen(
-        cmd,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-    )
-    assert proc.stdout is not None
-    for line in proc.stdout:
-        line = line.rstrip("\n")
-        if on_line:
+    try:
+        proc = subprocess.run(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+    except FileNotFoundError:
+        raise RuntimeError("找不到 ffmpeg，请先安装或在设置中指定路径")
+    log_tail = proc.stdout.strip().splitlines()[-25:] if proc.stdout else []
+    if on_line:
+        for line in log_tail:
             on_line(line)
-    ret = proc.wait()
-    if ret != 0:
-        raise RuntimeError(f"抽帧混合失败，退出码 {ret}")
+    if proc.returncode != 0:
+        detail = "\n".join(log_tail[-8:]) if log_tail else ""
+        raise RuntimeError(f"抽帧混合失败，退出码 {proc.returncode}\n{detail}")
     if not os.path.isfile(output_path):
         raise RuntimeError("抽帧混合未生成输出文件")
     return output_path
