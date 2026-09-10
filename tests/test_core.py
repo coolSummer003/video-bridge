@@ -8,11 +8,16 @@ from app.core.config import BinaryPaths
 from app.core.dedup import DedupOptions
 
 
-def test_dedup_options_default_filter_contains_hflip():
+def test_dedup_options_default_filter_has_no_hflip():
     opts = DedupOptions()
     f = opts.build_filter()
-    assert "hflip" in f
+    assert "hflip" not in f
     assert "eq=saturation=1.0500" in f
+
+
+def test_dedup_options_mirror_adds_hflip():
+    opts = DedupOptions(mirror=True, saturation=1.0, contrast=1.0, brightness=0.0)
+    assert "hflip" in opts.build_filter()
 
 
 def test_dedup_options_rotate_uses_radians():

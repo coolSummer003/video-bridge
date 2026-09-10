@@ -525,7 +525,7 @@ class MainWindow(QMainWindow):
         form.addRow("去重强度", self.dedup_strength)
 
         self.dedup_mirror = QCheckBox("水平镜像")
-        self.dedup_mirror.setChecked(True)
+        self.dedup_mirror.setChecked(False)
         form.addRow("处理选项", self.dedup_mirror)
 
         sat_row = QHBoxLayout()

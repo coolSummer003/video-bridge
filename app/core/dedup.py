@@ -12,7 +12,7 @@ from .config import BinaryPaths
 
 @dataclass
 class DedupOptions:
-    mirror: bool = True
+    mirror: bool = False
     saturation: float = 1.05
     contrast: float = 1.03
     brightness: float = 0.0
@@ -65,7 +65,7 @@ class DedupOptions:
 def options_from_strength(
     strength: str,
     *,
-    mirror: bool = True,
+    mirror: bool = False,
     saturation: float = 1.05,
     contrast: float = 1.03,
     randomize: bool = False,
