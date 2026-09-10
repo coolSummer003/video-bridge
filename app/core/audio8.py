@@ -5,6 +5,7 @@ import json
 import os
 import subprocess
 import tempfile
+import urllib.error
 import urllib.request
 
 from .config import BinaryPaths
@@ -51,8 +52,15 @@ def text_to_speech_audio8(
         headers={"Content-Type": "application/json"},
         method="POST",
     )
-    with urllib.request.urlopen(req, timeout=180) as resp:
-        data = resp.read()
+    try:
+        with urllib.request.urlopen(req, timeout=180) as resp:
+            data = resp.read()
+    except urllib.error.HTTPError as exc:
+        try:
+            detail = exc.read().decode("utf-8", errors="replace")
+        except Exception:
+            detail = ""
+        raise RuntimeError(f"Audio8 请求失败 HTTP {exc.code}: {detail[:500]}") from exc
 
     if not data:
         raise RuntimeError("Audio8 返回空音频")
