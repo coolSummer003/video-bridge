@@ -39,10 +39,9 @@ def text_to_speech_audio8(
 
     payload: dict = {
         "text": text,
+        "voice_name": voice_name or "default",
         "max_new_tokens": max_new_tokens,
     }
-    if voice_name:
-        payload["voice_name"] = voice_name
 
     if on_status:
         on_status("正在请求 Audio8 本地配音服务...")

@@ -821,7 +821,7 @@ class MainWindow(QMainWindow):
 
         self.dub_audio8_voice = QComboBox()
         self.dub_audio8_voice.setEditable(True)
-        self.dub_audio8_voice.addItem("默认音色（不指定）", "")
+        self.dub_audio8_voice.addItem("默认音色（内置）", "default")
         self.dub_audio8_voice.addItem("speaker_a（示例）", "speaker_a")
         self.dub_audio8_voice.setCurrentIndex(0)
         form.addRow("Audio8 音色", self.dub_audio8_voice)
