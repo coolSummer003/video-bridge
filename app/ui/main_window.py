@@ -35,7 +35,6 @@ from PySide6.QtWidgets import (
 
 from ..core.config import BinaryPaths
 from ..core.dedup import DedupOptions, dedup_video, options_from_strength
-from ..core.dedup_advanced import add_background_music, dedup_frame_mix, dedup_pip, dedup_random_segments
 from ..core.downloader import download_video
 from ..core.douyin_cookie import fetch_douyin_cookies
 from ..core.douyin_login import douyin_login
@@ -528,47 +527,6 @@ class MainWindow(QMainWindow):
         dir_row.addWidget(btn_open_dir)
         form.addRow("输出目录", dir_row)
 
-        mix_row = QHBoxLayout()
-        self.dedup_mix_file = QLineEdit()
-        self.dedup_mix_file.setPlaceholderText("可选：选择另一段素材，启用抽帧混合")
-        btn_mix = QPushButton("选择素材")
-        btn_mix.setProperty("secondary", True)
-        btn_mix.clicked.connect(self._pick_dedup_mix_file)
-        mix_row.addWidget(self.dedup_mix_file, 1)
-        mix_row.addWidget(btn_mix)
-        form.addRow("抽帧混合素材", mix_row)
-
-        bgm_row = QHBoxLayout()
-        self.dedup_bgm_file = QLineEdit()
-        self.dedup_bgm_file.setPlaceholderText("可选：选择背景音乐，叠加到视频")
-        btn_bgm = QPushButton("选择 BGM")
-        btn_bgm.setProperty("secondary", True)
-        btn_bgm.clicked.connect(self._pick_dedup_bgm_file)
-        bgm_row.addWidget(self.dedup_bgm_file, 1)
-        bgm_row.addWidget(btn_bgm)
-        form.addRow("背景音乐", bgm_row)
-
-        pip_row = QHBoxLayout()
-        self.dedup_pip_file = QLineEdit()
-        self.dedup_pip_file.setPlaceholderText("可选：选择另一段视频，作为角落画中画")
-        btn_pip = QPushButton("选择画中画")
-        btn_pip.setProperty("secondary", True)
-        btn_pip.clicked.connect(self._pick_dedup_pip_file)
-        pip_row.addWidget(self.dedup_pip_file, 1)
-        pip_row.addWidget(btn_pip)
-        form.addRow("画中画素材", pip_row)
-
-        seg_row = QHBoxLayout()
-        self.dedup_segments_enable = QCheckBox("随机片段重排")
-        self.dedup_segment_count = QSpinBox()
-        self.dedup_segment_count.setRange(2, 8)
-        self.dedup_segment_count.setValue(3)
-        seg_row.addWidget(self.dedup_segments_enable)
-        seg_row.addWidget(QLabel("段数"))
-        seg_row.addWidget(self.dedup_segment_count)
-        seg_row.addStretch(1)
-        form.addRow("片段处理", seg_row)
-
         self.dedup_strength = QComboBox()
         self.dedup_strength.addItems(["轻度", "中度", "重度"])
         self.dedup_strength.setCurrentText("中度")
@@ -618,36 +576,6 @@ class MainWindow(QMainWindow):
         if d:
             self.dedup_dir.setText(d)
 
-    def _pick_dedup_mix_file(self):
-        f, _ = QFileDialog.getOpenFileName(
-            self,
-            "选择抽帧混合素材视频",
-            str(Path.home()),
-            "Video (*.mp4 *.mov *.mkv *.webm *.flv *.avi)",
-        )
-        if f:
-            self.dedup_mix_file.setText(f)
-
-    def _pick_dedup_bgm_file(self):
-        f, _ = QFileDialog.getOpenFileName(
-            self,
-            "选择背景音乐",
-            str(Path.home()),
-            "Audio (*.mp3 *.wav *.m4a *.aac *.flac)",
-        )
-        if f:
-            self.dedup_bgm_file.setText(f)
-
-    def _pick_dedup_pip_file(self):
-        f, _ = QFileDialog.getOpenFileName(
-            self,
-            "选择画中画素材",
-            str(Path.home()),
-            "Video (*.mp4 *.mov *.mkv *.webm *.flv *.avi)",
-        )
-        if f:
-            self.dedup_pip_file.setText(f)
-
     def _run_dedup(self):
         video = self.dedup_file.text().strip()
         output_dir = self.dedup_dir.text().strip()
@@ -667,119 +595,16 @@ class MainWindow(QMainWindow):
             contrast=self.dedup_contrast.value(),
             randomize=self.dedup_random.isChecked(),
         )
-        mix_file = self.dedup_mix_file.text().strip()
-        bgm_file = self.dedup_bgm_file.text().strip()
-        pip_file = self.dedup_pip_file.text().strip()
-        segments_enabled = self.dedup_segments_enable.isChecked()
-        segment_count = self.dedup_segment_count.value()
-        if mix_file and not os.path.isfile(mix_file):
-            QMessageBox.warning(self, "提示", "抽帧混合素材文件不存在")
-            return
-        if bgm_file and not os.path.isfile(bgm_file):
-            QMessageBox.warning(self, "提示", "背景音乐文件不存在")
-            return
-        if pip_file and not os.path.isfile(pip_file):
-            QMessageBox.warning(self, "提示", "画中画素材文件不存在")
-            return
-        self._start(
-            self.btn_dedup,
-            self._task_dedup,
-            video,
-            output_dir,
-            opts,
-            mix_file,
-            bgm_file,
-            pip_file,
-            segments_enabled,
-            segment_count,
-        )
+        self._start(self.btn_dedup, self._task_dedup, video, output_dir, opts)
 
-    def _task_dedup(
-        self,
-        button,
-        video: str,
-        output_dir: str,
-        opts: DedupOptions,
-        mix_file: str,
-        bgm_file: str,
-        pip_file: str,
-        segments_enabled: bool,
-        segment_count: int,
-    ):
+    def _task_dedup(self, button, video: str, output_dir: str, opts: DedupOptions):
         try:
             self._log(f"开始去重/二创: {video}")
             bins = BinaryPaths.detect()
             stem = os.path.splitext(os.path.basename(video))[0]
-            current = video
-            temp_files = []
-            advanced_used = bool(mix_file or pip_file or bgm_file or segments_enabled)
-
-            def make_temp(name: str) -> str:
-                path = os.path.join(output_dir, f".{stem}.{name}_tmp.mp4")
-                temp_files.append(path)
-                return path
-
-            # 1. 主结构处理：抽帧混合优先；否则片段重排；否则滤镜参数去重
-            if mix_file:
-                mixed = make_temp("mix")
-                self._log("使用抽帧混合模式（素材 B 帧插入内容 A）…")
-                dedup_frame_mix(video, mix_file, mixed, binaries=bins, on_line=self._log)
-                current = mixed
-                self._log("抽帧混合完成")
-
-            if segments_enabled:
-                seg = make_temp("seg")
-                self._log(f"使用随机片段重排（{segment_count} 段）…")
-                dedup_random_segments(
-                    current,
-                    seg,
-                    segment_count=segment_count,
-                    shuffle=True,
-                    binaries=bins,
-                    on_line=self._log,
-                )
-                current = seg
-                self._log("片段重排完成")
-
-            if not mix_file and not segments_enabled:
-                if advanced_used:
-                    normal = make_temp("normal")
-                else:
-                    normal = os.path.join(output_dir, f"{stem}.dedup.mp4")
-                self._log("使用滤镜参数去重模式…")
-                dedup_video(current, normal, opts, binaries=bins, on_line=self._log)
-                current = normal
-
-            # 2. 画中画叠加
-            if pip_file:
-                pip = make_temp("pip")
-                self._log("叠加画中画素材…")
-                dedup_pip(current, pip_file, pip, binaries=bins, on_line=self._log)
-                current = pip
-                self._log("画中画完成")
-
-            # 3. BGM 或收尾输出
-            if bgm_file:
-                final = os.path.join(output_dir, f"{stem}.final.mp4")
-                self._log("叠加背景音乐…")
-                add_background_music(current, bgm_file, final, binaries=bins, on_line=self._log)
-                current = final
-                self._log(f"去重完成: {final}")
-            elif advanced_used:
-                final = os.path.join(output_dir, f"{stem}.final.mp4")
-                os.replace(current, final)
-                current = final
-                self._log(f"去重完成: {final}")
-            else:
-                self._log(f"去重完成: {current}")
-
-            # 4. 清理临时文件
-            for tmp in temp_files:
-                if os.path.exists(tmp):
-                    try:
-                        os.remove(tmp)
-                    except OSError:
-                        pass
+            output = os.path.join(output_dir, f"{stem}.dedup.mp4")
+            dedup_video(video, output, opts, binaries=bins, on_line=self._log)
+            self._log(f"去重完成: {output}")
         except Exception as exc:
             self._log(f"[去重失败] {exc}")
         finally:
