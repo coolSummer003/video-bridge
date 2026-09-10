@@ -47,8 +47,8 @@ jobs:
       - name: Build whisper-cli from whisper.cpp (Windows)
         shell: pwsh
         run: |
-          git clone --depth 1 https://github.com/ggerganov/whisper.cpp.git vendor/whisper.cpp
-          cmake -S vendor/whisper.cpp -B vendor/whisper.cpp/build -DCMAKE_BUILD_TYPE=Release -DGGML_NATIVE=ON
+          git clone --depth 1 https://github.com/ggml-org/whisper.cpp.git vendor/whisper.cpp
+          cmake -S vendor/whisper.cpp -B vendor/whisper.cpp/build -DCMAKE_BUILD_TYPE=Release -DGGML_NATIVE=ON -DWHISPER_BUILD_TESTS=OFF -DWHISPER_BUILD_SERVER=OFF
           cmake --build vendor/whisper.cpp/build --config Release --parallel
 
           $candidates = @(

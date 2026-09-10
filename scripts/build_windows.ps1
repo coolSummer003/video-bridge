@@ -42,6 +42,7 @@ Write-Host "==> Running PyInstaller..." -ForegroundColor Cyan
     --name $AppName `
     --windowed `
     --add-data "resources/bin;resources/bin" `
+    --collect-all playwright `
     app/main.py
 
 Write-Host ""
