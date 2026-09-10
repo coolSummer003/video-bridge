@@ -38,12 +38,15 @@ from ..core.dedup_advanced import add_background_music, dedup_frame_mix, dedup_p
 from ..core.downloader import download_video
 from ..core.douyin_cookie import fetch_douyin_cookies
 from ..core.douyin_login import douyin_login
-from ..core.audio8 import is_audio8_available, text_to_speech_audio8
+from ..core.audio8 import is_audio8_available, list_audio8_voices, text_to_speech_audio8
 from ..core.audio8_bootstrap import ensure_audio8_ready
 from ..core.dubbing import replace_video_audio
 from ..core.model_downloader import download_model
 from ..core.platforms import detect_platform, extract_video_url, platform_options
 from ..core.subtitle import burn_subtitles, extract_subtitle_text, generate_srt
+
+
+AUDIO8_BASE_URL = os.environ.get("VIDEO_BRIDGE_AUDIO8_URL", "http://127.0.0.1:8024")
 
 
 class MainWindow(QMainWindow):
@@ -54,6 +57,7 @@ class MainWindow(QMainWindow):
     model_finished = Signal()
     douyin_login_done = Signal(str)
     subtitle_srt_ready = Signal(str)
+    audio8_voices_ready = Signal(object)
 
     def __init__(self):
         super().__init__()
@@ -67,6 +71,7 @@ class MainWindow(QMainWindow):
         self.model_finished.connect(self._on_model_finished)
         self.douyin_login_done.connect(self._on_douyin_login_done)
         self.subtitle_srt_ready.connect(self._on_subtitle_srt_ready)
+        self.audio8_voices_ready.connect(self._on_audio8_voices_ready)
         self._douyin_cookie_path: str | None = None
         self._build_ui()
         self._init_model_state()
@@ -813,18 +818,11 @@ class MainWindow(QMainWindow):
         video_row.addWidget(btn_video)
         form.addRow("替换视频原声", video_row)
 
-        url_row = QHBoxLayout()
-        self.dub_audio8_url = QLineEdit("http://127.0.0.1:8024")
-        url_row.addWidget(QLabel("服务地址"))
-        url_row.addWidget(self.dub_audio8_url, 1)
-        form.addRow("Audio8 服务", url_row)
-
         self.dub_audio8_voice = QComboBox()
-        self.dub_audio8_voice.setEditable(True)
+        self.dub_audio8_voice.setEditable(False)
         self.dub_audio8_voice.addItem("默认音色（内置）", "default")
-        self.dub_audio8_voice.addItem("speaker_a（示例）", "speaker_a")
         self.dub_audio8_voice.setCurrentIndex(0)
-        form.addRow("Audio8 音色", self.dub_audio8_voice)
+        form.addRow("音色", self.dub_audio8_voice)
 
         self.dub_text = QTextEdit()
         self.dub_text.setPlaceholderText("输入需要配音的文字，例如字幕内容、旁白或解说词…")
@@ -897,6 +895,24 @@ class MainWindow(QMainWindow):
         if f:
             self.dub_output.setText(f)
 
+    def _on_audio8_voices_ready(self, voices: object):
+        names = []
+        if isinstance(voices, list):
+            for item in voices:
+                if isinstance(item, dict) and item.get("name"):
+                    names.append(str(item["name"]))
+        current = self.dub_audio8_voice.currentData() or "default"
+        self.dub_audio8_voice.blockSignals(True)
+        self.dub_audio8_voice.clear()
+        self.dub_audio8_voice.addItem("默认音色（内置）", "default")
+        for name in sorted(set(names)):
+            if name == "default":
+                continue
+            self.dub_audio8_voice.addItem(name, name)
+        index = self.dub_audio8_voice.findData(current)
+        self.dub_audio8_voice.setCurrentIndex(index if index >= 0 else 0)
+        self.dub_audio8_voice.blockSignals(False)
+
     def _run_dub(self):
         text = self.dub_text.toPlainText().strip()
         output = self.dub_output.text().strip()
@@ -910,16 +926,12 @@ class MainWindow(QMainWindow):
         if video and not os.path.isfile(video):
             QMessageBox.warning(self, "提示", "视频文件不存在")
             return
-        audio8_url = self.dub_audio8_url.text().strip() or "http://127.0.0.1:8024"
-        audio8_voice = ""
+        audio8_url = AUDIO8_BASE_URL
+        audio8_voice = "default"
         if self.dub_audio8_voice.currentIndex() >= 0:
             data = self.dub_audio8_voice.itemData(self.dub_audio8_voice.currentIndex())
             if data:
                 audio8_voice = str(data)
-        if not audio8_voice:
-            typed = self.dub_audio8_voice.currentText().strip()
-            if typed and typed != "默认音色（不指定）":
-                audio8_voice = typed
         self._start(
             self.btn_dub,
             self._task_dub,
@@ -942,12 +954,18 @@ class MainWindow(QMainWindow):
         tmp_audio = None
         try:
             if not is_audio8_available(audio8_url):
-                if audio8_url.rstrip("/") == "http://127.0.0.1:8024":
-                    self._log("Audio8 本地服务未启动，首次使用将自动下载模型并启动...")
+                if audio8_url.rstrip("/") == AUDIO8_BASE_URL.rstrip("/"):
+                    self._log("配音服务未启动，首次使用将自动下载模型并启动...")
                     audio8_url = ensure_audio8_ready(on_status=self._log)
                 else:
-                    raise RuntimeError("Audio8 远程服务不可用，请检查服务地址")
-            self._log(f"开始 Audio8 配音: {audio8_url}")
+                    raise RuntimeError("配音服务不可用")
+            try:
+                voices = list_audio8_voices(audio8_url)
+                if voices:
+                    self.audio8_voices_ready.emit(voices)
+            except Exception:
+                pass
+            self._log("开始 Audio8 配音")
             if video:
                 tmp_audio = output + ".dub_tmp.wav"
                 text_to_speech_audio8(text, tmp_audio, base_url=audio8_url, voice_name=audio8_voice, on_status=self._log)

@@ -20,6 +20,17 @@ def is_audio8_available(base_url: str = "http://127.0.0.1:8024") -> bool:
         return False
 
 
+def list_audio8_voices(base_url: str = "http://127.0.0.1:8024", timeout: int = 5) -> list[dict]:
+    """获取 Audio8 本地服务已注册的音色列表。"""
+    try:
+        with urllib.request.urlopen(base_url.rstrip("/") + "/api/voices", timeout=timeout) as resp:
+            data = json.load(resp)
+        voices = data.get("voices", []) if isinstance(data, dict) else []
+        return [v for v in voices if isinstance(v, dict) and v.get("name")]
+    except Exception:
+        return []
+
+
 def text_to_speech_audio8(
     text: str,
     output_path: str,
