@@ -22,6 +22,34 @@ def _safe_name(text: str, fallback: str) -> str:
     return (text[:80] or fallback).strip()
 
 
+_LAUNCH_ARGS = [
+    "--disable-blink-features=AutomationControlled",
+    "--autoplay-policy=no-user-gesture-required",
+]
+
+
+def _launch_browser(p, log):
+    """按优先级启动浏览器：内置 Chromium → 系统 Chrome → 系统 Edge。
+
+    打包版通常不带 Playwright Chromium，此时回退到系统浏览器。
+    """
+    attempts = [
+        ("内置 Chromium", {}),
+        ("系统 Chrome", {"channel": "chrome"}),
+        ("系统 Edge", {"channel": "msedge"}),
+    ]
+    last_error = None
+    for label, extra in attempts:
+        try:
+            browser = p.chromium.launch(headless=True, args=_LAUNCH_ARGS, **extra)
+            log(f"使用浏览器: {label}")
+            return browser
+        except Exception as exc:
+            last_error = exc
+            log(f"{label} 启动失败，尝试下一个...")
+    raise RuntimeError(f"无法启动浏览器（需要 Chromium / Chrome / Edge）：{last_error}")
+
+
 def download_douyin_video(
     url: str,
     output_dir: str,
@@ -34,13 +62,7 @@ def download_douyin_video(
     log = on_status or (lambda _m: None)
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(
-            headless=True,
-            args=[
-                "--disable-blink-features=AutomationControlled",
-                "--autoplay-policy=no-user-gesture-required",
-            ],
-        )
+        browser = _launch_browser(p, log)
         try:
             ctx = browser.new_context(user_agent=UA, viewport={"width": 1280, "height": 800})
             page = ctx.new_page()

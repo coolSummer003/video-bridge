@@ -49,8 +49,7 @@
 - Cookie `expires=-1` → 写 `0`（会话 Cookie）
 
 ## 5. 待办
-1. `douyin_browser.py` 加浏览器回退（打包版无 Chromium）：
-   依次尝试 内置 chromium → `channel="chrome"` → `channel="msedge"`
+1. ~~`douyin_browser.py` 加浏览器回退~~ 已完成：内置 Chromium → Chrome → Edge
 2. 打 Windows 包（GitHub Actions）：
    ```bash
    gh workflow run build-windows.yml --repo coolSummer003/video-bridge
