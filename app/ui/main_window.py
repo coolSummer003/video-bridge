@@ -48,6 +48,7 @@ from ..core.subtitle import burn_subtitles, extract_subtitle_text, generate_srt
 
 
 AUDIO8_BASE_URL = os.environ.get("VIDEO_BRIDGE_AUDIO8_URL", "http://127.0.0.1:8024")
+SHOW_DUB_TAB = os.environ.get("VIDEO_BRIDGE_SHOW_DUB", "0") == "1"
 
 
 class MainWindow(QMainWindow):
@@ -94,7 +95,9 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(self._build_download_tab(), "下载")
         self.tabs.addTab(self._build_dedup_tab(), "去重")
         self.tabs.addTab(self._build_subtitle_tab(), "字幕")
-        self.tabs.addTab(self._build_dub_tab(), "配音")
+        self._dub_page = self._build_dub_tab()
+        if SHOW_DUB_TAB:
+            self.tabs.addTab(self._dub_page, "配音")
         layout.addWidget(self.tabs, 1)
 
         self.progress = QProgressBar()
