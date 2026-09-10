@@ -109,7 +109,6 @@ def dedup_frame_mix(
         material_path,
         "-filter_complex",
         filter_complex,
-        "-shortest",
         "-map",
         "[vout]",
         "-map",
@@ -126,6 +125,8 @@ def dedup_frame_mix(
         "aac",
         "-b:a",
         "192k",
+        "-t",
+        f"{duration:.3f}",
         "-movflags",
         "+faststart",
         output_path,
@@ -329,13 +330,16 @@ def dedup_pip(
     width -= width % 2
     height -= height % 2
     fps = int(info.get("fps") or 30)
+    duration = float(info.get("duration") or 0)
+    if duration <= 0:
+        raise RuntimeError("无法读取视频时长，不能进行隐形混合")
     os.makedirs(os.path.dirname(os.path.abspath(output_path)) or ".", exist_ok=True)
     # blend 要求两路分辨率/格式/SAR/帧率完全一致，先把 B 严格对齐到 A
     filter_complex = (
         f"[0:v]scale={width}:{height},setsar=1,fps={fps},format=yuv420p[base];"
         f"[1:v]scale={width}:{height}:force_original_aspect_ratio=increase,"
         f"crop={width}:{height},setsar=1,fps={fps},format=yuv420p[ov0];"
-        f"[base][ov0]blend=all_mode=normal:all_opacity={opacity:.4f},format=yuv420p[vout]"
+        f"[base][ov0]blend=all_expr='A*{1.0 - opacity:.4f}+B*{opacity:.4f}',format=yuv420p[vout]"
     )
     cmd = [
         bins.ffmpeg,
@@ -348,7 +352,6 @@ def dedup_pip(
         overlay_path,
         "-filter_complex",
         filter_complex,
-        "-shortest",
         "-map",
         "[vout]",
         "-map",
@@ -363,6 +366,8 @@ def dedup_pip(
         "aac",
         "-b:a",
         "192k",
+        "-t",
+        f"{duration:.3f}",
         "-movflags",
         "+faststart",
         output_path,
