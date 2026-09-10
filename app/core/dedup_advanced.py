@@ -446,9 +446,16 @@ def dedup_structure_auto(
         src_ref = [f"s{i}" for i in range(count)]
     else:
         src_ref = [source_label]
+    # 每段时长包含转场重叠量，保证拼接后总时长仍等于原视频时长
+    if count > 1:
+        seg_len = (duration + (count - 1) * trans_dur) / count
+        step = seg_len - trans_dur
+    else:
+        seg_len = duration
+        step = duration
     for i in range(count):
-        start = duration * i / count
-        end = duration * (i + 1) / count
+        start = i * step
+        end = min(duration, start + seg_len)
         pieces_v.append(
             f"[{src_ref[i]}]trim=start={start:.3f}:end={end:.3f},setpts=PTS-STARTPTS[v{i}]"
         )
@@ -463,7 +470,7 @@ def dedup_structure_auto(
     else:
         for i in range(1, count):
             prev_v = "v0" if i == 1 else f"x{i - 1}"
-            offset = i * (duration / count) - i * trans_dur
+            offset = i * step
             filter_parts.append(
                 f"[{prev_v}][v{i}]xfade=transition={trans}:"
                 f"duration={trans_dur:.3f}:offset={offset:.3f}[x{i}]"
