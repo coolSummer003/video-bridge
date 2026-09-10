@@ -36,6 +36,7 @@ from PySide6.QtWidgets import (
 from ..core.config import BinaryPaths
 from ..core.dedup import DedupOptions, dedup_video, options_from_strength
 from ..core.downloader import download_video
+from ..core.dedup_advanced import dedup_structure_auto
 from ..core.douyin_cookie import fetch_douyin_cookies
 from ..core.douyin_login import douyin_login
 from ..core.audio8 import is_audio8_available, list_audio8_voices, register_audio8_voice, text_to_speech_audio8
@@ -556,6 +557,10 @@ class MainWindow(QMainWindow):
         self.dedup_random.setChecked(True)
         form.addRow("", self.dedup_random)
 
+        self.dedup_struct = QCheckBox("自动结构处理（转场+竖屏模糊拓边）")
+        self.dedup_struct.setChecked(True)
+        form.addRow("", self.dedup_struct)
+
         self.btn_dedup = QPushButton("开始去重")
         self.btn_dedup.clicked.connect(self._run_dedup)
         form.addRow("", self.btn_dedup)
@@ -595,15 +600,27 @@ class MainWindow(QMainWindow):
             contrast=self.dedup_contrast.value(),
             randomize=self.dedup_random.isChecked(),
         )
-        self._start(self.btn_dedup, self._task_dedup, video, output_dir, opts)
+        struct = self.dedup_struct.isChecked()
+        self._start(self.btn_dedup, self._task_dedup, video, output_dir, opts, struct)
 
-    def _task_dedup(self, button, video: str, output_dir: str, opts: DedupOptions):
+    def _task_dedup(self, button, video: str, output_dir: str, opts: DedupOptions, struct: bool):
         try:
             self._log(f"开始去重/二创: {video}")
             bins = BinaryPaths.detect()
             stem = os.path.splitext(os.path.basename(video))[0]
             output = os.path.join(output_dir, f"{stem}.dedup.mp4")
-            dedup_video(video, output, opts, binaries=bins, on_line=self._log)
+            if struct:
+                # 竖屏自动模糊拓边 + 3 段闪白转场，再叠加原有参数滤镜
+                struct_out = os.path.join(output_dir, f".{stem}.struct.mp4")
+                dedup_structure_auto(video, struct_out, segment_count=3, transition="fadewhite", binaries=bins, on_line=self._log)
+                self._log("结构处理完成，叠加参数滤镜…")
+                dedup_video(struct_out, output, opts, binaries=bins, on_line=self._log)
+                try:
+                    os.remove(struct_out)
+                except OSError:
+                    pass
+            else:
+                dedup_video(video, output, opts, binaries=bins, on_line=self._log)
             self._log(f"去重完成: {output}")
         except Exception as exc:
             self._log(f"[去重失败] {exc}")

@@ -360,3 +360,132 @@ def dedup_pip(
         raise RuntimeError("画中画叠加未生成输出文件")
     return output_path
 
+
+def dedup_structure_auto(
+    video_path: str,
+    output_path: str,
+    *,
+    segment_count: int = 3,
+    transition: str = "fade",
+    background_blur: bool = True,
+    binaries: BinaryPaths | None = None,
+    on_line: callable | None = None,
+) -> str:
+    """单遍自动处理：竖屏模糊拓边 + N 段转场拼接。
+
+    - 竖屏视频（高大于宽）自动加 16:9 模糊背景。
+    - 长视频自动切成 N 段，用 xfade 转场拼接（淡入淡出 / 闪白）。
+    - 全部在一条 filter_complex 里单遍执行，音画同步。
+    """
+    bins = binaries or BinaryPaths.detect()
+    info = probe_video(video_path, bins.ffprobe)
+    width = int(info.get("width") or 0)
+    height = int(info.get("height") or 0)
+    duration = float(info.get("duration") or 0)
+    if width <= 0 or height <= 0 or duration <= 0:
+        raise RuntimeError("无法读取视频尺寸或时长，不能进行自动结构处理")
+    audio = has_audio_stream(video_path, bins.ffprobe)
+
+    os.makedirs(os.path.dirname(os.path.abspath(output_path)) or ".", exist_ok=True)
+    count = max(1, min(6, int(segment_count)))
+    trans = "fadewhite" if transition == "fadewhite" else "fade"
+    trans_dur = min(0.6, duration / max(2, count) / 2)
+
+    source_label = "src"
+    filter_parts = []
+    if background_blur and height > width:
+        # 竖屏 -> 先生成 16:9 模糊背景并叠加前景
+        filter_parts.append(
+            f"[0:v]split[v1][v2];"
+            f"[v1]scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720,boxblur=20:2[bg];"
+            f"[v2]scale=720:-2,format=yuv420p[fg];"
+            f"[bg][fg]overlay=(W-w)/2:(H-h)/2,format=yuv420p[{source_label}]"
+        )
+    else:
+        filter_parts.append(f"[0:v]scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p[{source_label}]")
+
+    current_a = "0:a"
+    pieces_v: list[str] = []
+    pieces_a: list[str] = []
+    # 中间滤镜输出只能被消费一次: split 出 N 路再分别 trim
+    if count > 1:
+        split_outs = "".join(f"[s{i}]" for i in range(count))
+        filter_parts.append(f"[{source_label}]split={count}{split_outs}")
+        src_ref = [f"s{i}" for i in range(count)]
+    else:
+        src_ref = [source_label]
+    for i in range(count):
+        start = duration * i / count
+        end = duration * (i + 1) / count
+        pieces_v.append(
+            f"[{src_ref[i]}]trim=start={start:.3f}:end={end:.3f},setpts=PTS-STARTPTS[v{i}]"
+        )
+        if audio:
+            pieces_a.append(
+                f"[{current_a}]atrim=start={start:.3f}:end={end:.3f},asetpts=PTS-STARTPTS[a{i}]"
+            )
+    filter_parts += pieces_v + pieces_a
+
+    if count == 1:
+        v_out, a_out = f"[v0]", ("[a0]" if audio else None)
+    else:
+        for i in range(1, count):
+            prev_v = "v0" if i == 1 else f"x{i - 1}"
+            offset = i * (duration / count) - i * trans_dur
+            filter_parts.append(
+                f"[{prev_v}][v{i}]xfade=transition={trans}:"
+                f"duration={trans_dur:.3f}:offset={offset:.3f}[x{i}]"
+            )
+            if audio:
+                prev_a = "a0" if i == 1 else f"y{i - 1}"
+                filter_parts.append(
+                    f"[{prev_a}][a{i}]acrossfade=d={trans_dur:.3f}:c1=tri:c2=tri[y{i}]"
+                )
+        v_out = f"[x{count - 1}]"
+        a_out = f"[y{count - 1}]" if audio else None
+
+    cmd = [
+        bins.ffmpeg,
+        "-y",
+        "-i",
+        video_path,
+        "-filter_complex",
+        ";".join(filter_parts),
+        "-map",
+        v_out,
+    ]
+    if a_out:
+        cmd += ["-map", a_out, "-c:a", "aac", "-b:a", "192k"]
+    cmd += [
+        "-c:v",
+        "libx264",
+        "-preset",
+        "medium",
+        "-crf",
+        "19",
+        "-pix_fmt",
+        "yuv420p",
+        "-movflags",
+        "+faststart",
+        output_path,
+    ]
+    proc = subprocess.Popen(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    assert proc.stdout is not None
+    for line in proc.stdout:
+        line = line.rstrip("\n")
+        if on_line:
+            on_line(line)
+    ret = proc.wait()
+    if ret != 0:
+        raise RuntimeError(f"自动结构处理失败，退出码 {ret}")
+    if not os.path.isfile(output_path):
+        raise RuntimeError("自动结构处理未生成输出文件")
+    return output_path
+
