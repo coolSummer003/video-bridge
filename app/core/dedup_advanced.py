@@ -67,13 +67,15 @@ def dedup_frame_mix(
     material_path: str,
     output_path: str,
     *,
+    ratio: int = 7,
     binaries: BinaryPaths | None = None,
     on_line: callable | None = None,
 ) -> str:
-    """把素材 B 的帧交错插入内容 A，形成高帧率混合视频。
+    """把素材 B 的帧稀疏插入内容 A，形成高帧率混合视频。
 
-    类似 AB-Video-Deduplicator 的抽帧混合思路：在相同时间内，
-    A/B 两路帧交替出现，输出帧率约为 A 的两倍。
+    A:B = ratio:1（默认 7:1，输出 240fps）。B 帧只占极小比例、
+    每帧仅停留约 4ms，正常播放几乎不可感知；但文件数据特征与
+    源视频完全不同。ratio=1(60fps)/3(120fps) 去重更强但闪烁可见。
     """
     bins = binaries or BinaryPaths.detect()
     info = probe_video(content_path, bins.ffprobe)
@@ -81,15 +83,17 @@ def dedup_frame_mix(
         raise RuntimeError("无法读取内容视频尺寸")
     width = info["width"] - (info["width"] % 2)
     height = info["height"] - (info["height"] % 2)
-    source_fps = info["fps"] or 30
-    target_fps = max(20, min(30, source_fps)) if source_fps <= 30 else 30
-    output_fps = target_fps * 2
+    if ratio not in (1, 3, 7):
+        raise ValueError("ratio 只支持 1 / 3 / 7（分别输出 60 / 120 / 240fps）")
+    output_fps = 30 * (ratio + 1)
+    con_fps = 30 * ratio
+    mat_fps = 30
     duration = info["duration"] or 0
 
     filter_complex = (
-        f"[0:v]fps={target_fps},setpts=PTS-STARTPTS[v0];"
+        f"[0:v]fps={con_fps},setpts=PTS-STARTPTS[v0];"
         f"[1:v]scale={width}:{height}:force_original_aspect_ratio=increase,"
-        f"crop={width}:{height},fps={target_fps},setpts=PTS-STARTPTS,"
+        f"crop={width}:{height},fps={mat_fps},setpts=PTS-STARTPTS,"
         f"trim=duration={duration:.3f},setpts=PTS-STARTPTS[v1];"
         f"[v0][v1]interleave=2[vout]"
     )
@@ -105,6 +109,7 @@ def dedup_frame_mix(
         material_path,
         "-filter_complex",
         filter_complex,
+        "-shortest",
         "-map",
         "[vout]",
         "-map",
@@ -301,27 +306,37 @@ def dedup_pip(
     overlay_path: str,
     output_path: str,
     *,
-    overlay_scale: float = 0.25,
+    opacity: float = 0.03,
     binaries: BinaryPaths | None = None,
     on_line: callable | None = None,
 ) -> str:
-    """在视频右下角叠加另一个小画面（画中画），改变画面结构。"""
+    """隐形双视频混合：素材 B 全屏等尺寸、极低透明度混入 A。
+
+    opacity 默认 0.03（3%）：逐像素都被 B 轻微扰动，
+    人眼几乎不可见；平台指纹/压缩数据却完全改变。
+    opacity 上限 0.10，超过则开始能看出叠影。
+    """
     bins = binaries or BinaryPaths.detect()
+    if not 0.0 < opacity <= 0.10:
+        raise ValueError("opacity 必须在 (0, 0.10] 之间")
     os.makedirs(os.path.dirname(os.path.abspath(output_path)) or ".", exist_ok=True)
-    w = f"iw*{overlay_scale:.4f}"
     filter_complex = (
-        f"[1:v]scale={w}:-2[ov];"
-        f"[0:v][ov]overlay=W-w-20:H-h-20[vout]"
+        f"[0:v]format=yuv420p[base];"
+        f"[1:v]scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p[ov0];"
+        f"[base][ov0]blend=all_mode=normal:all_opacity={opacity:.4f},format=yuv420p[vout]"
     )
     cmd = [
         bins.ffmpeg,
         "-y",
         "-i",
         video_path,
+        "-stream_loop",
+        "-1",
         "-i",
         overlay_path,
         "-filter_complex",
         filter_complex,
+        "-shortest",
         "-map",
         "[vout]",
         "-map",
@@ -355,9 +370,9 @@ def dedup_pip(
             on_line(line)
     ret = proc.wait()
     if ret != 0:
-        raise RuntimeError(f"画中画叠加失败，退出码 {ret}")
+        raise RuntimeError(f"隐形混合失败，退出码 {ret}")
     if not os.path.isfile(output_path):
-        raise RuntimeError("画中画叠加未生成输出文件")
+        raise RuntimeError("隐形混合未生成输出文件")
     return output_path
 
 
