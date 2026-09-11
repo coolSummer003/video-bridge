@@ -10,6 +10,8 @@ jobs:
   build-windows:
     runs-on: windows-latest
     timeout-minutes: 60
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout code
@@ -113,6 +115,23 @@ jobs:
         run: |
           Compress-Archive -Path "dist/VideoBridge/*" -DestinationPath "VideoBridge-windows.zip" -Force
           Get-ChildItem -Path "dist/VideoBridge" -Recurse | Select-Object FullName, Length | Select-Object -First 20
+
+      - name: Publish to GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $ref = "${{ github.ref_name }}"
+          if ($ref -like "v*") { $tag = $ref } else { $tag = "windows-latest" }
+          $notes = "Auto build from commit ${{ github.sha }} (run ${{ github.run_id }})"
+          gh release view $tag 2>$null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $tag --title "VideoBridge Windows ($tag)" --notes $notes
+          } else {
+            gh release edit $tag --notes $notes
+          }
+          gh release upload $tag "VideoBridge-windows.zip" --clobber
+          Write-Host "Release: https://github.com/${{ github.repository }}/releases/tag/$tag"
 
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
