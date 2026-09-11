@@ -60,7 +60,15 @@
      gh workflow run build-windows.yml --repo coolSummer003/video-bridge
      gh run list --repo coolSummer003/video-bridge --workflow build-windows.yml
      ```
-3. 如需：macOS `.dmg` 打包 / 签名公证
+3. Windows 产物已接入 GitHub Release 自动发布：
+   - workflow `.github/workflows/build-windows.yml` 每次构建后执行
+     `gh release upload windows-latest VideoBridge-windows.zip --clobber`
+   - 固定 tag：`windows-latest`（滚动更新，下载链接永久稳定）
+   - 版本 tag 触发（`v*`）时会发布到对应 tag
+   - 安装包直链：
+     `https://github.com/coolSummer003/video-bridge/releases/download/windows-latest/VideoBridge-windows.zip`
+   - 仓库为 **private**，匿名访问资产会 404，需登录仓库成员账号
+4. 如需：macOS `.dmg` 打包 / 签名公证
 
 ## 6. 常用命令
 ```bash
