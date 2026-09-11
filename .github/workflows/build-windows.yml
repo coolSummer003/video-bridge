@@ -87,6 +87,22 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[dev]" pyinstaller
 
+      - name: Bundle MSVC runtime DLLs for whisper
+        shell: pwsh
+        run: |
+          # whisper.cpp 的 ggml/whisper DLL 依赖 MSVC 运行时 + OpenMP(vcomp140)
+          # 必须与 whisper-cli.exe 放在同一目录，否则子进程可能找不到
+          $names = @("vcomp140.dll", "vcruntime140.dll", "vcruntime140_1.dll", "msvcp140.dll")
+          foreach ($n in $names) {
+            $src = Join-Path "C:\Windows\System32" $n
+            if (Test-Path $src) {
+              Copy-Item $src "resources/bin/$n" -Force
+              Write-Host "bundled $n"
+            } else {
+              Write-Host "WARN: $n not found in System32"
+            }
+          }
+
       - name: Run Windows build script
         shell: pwsh
         run: |
