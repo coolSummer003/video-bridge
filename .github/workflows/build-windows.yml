@@ -74,6 +74,13 @@ jobs:
           Copy-Item $found.FullName "resources/bin/whisper-cli.exe" -Force
           Write-Host "whisper-cli installed from $($found.FullName)"
 
+          # whisper-cli.exe 依赖同目录的 whisper.dll / ggml*.dll，必须一起打包
+          $binDir = Split-Path $found.FullName -Parent
+          Get-ChildItem -Path $binDir -Filter "*.dll" -File | ForEach-Object {
+            Copy-Item $_.FullName "resources/bin/" -Force
+            Write-Host "copied dll: $($_.Name)"
+          }
+
       - name: Install Python dependencies
         shell: pwsh
         run: |
