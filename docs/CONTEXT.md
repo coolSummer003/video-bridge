@@ -50,12 +50,16 @@
 
 ## 5. 待办
 1. ~~`douyin_browser.py` 加浏览器回退~~ 已完成：内置 Chromium → Chrome → Edge
-2. 打 Windows 包（GitHub Actions）：
-   ```bash
-   gh workflow run build-windows.yml --repo coolSummer003/video-bridge
-   gh run list --repo coolSummer003/video-bridge --workflow build-windows.yml
-   gh run download <run-id> -n VideoBridge-Windows --repo coolSummer003/video-bridge -D artifacts/windows
-   ```
+2. ~~打 Windows 包~~ 已完成（run 34550257712）。要点：
+   - PyInstaller 加 `--collect-all playwright`（否则抖音下载器起不来）
+   - whisper-cli.exe 必须同目录打上 `whisper.dll` / `ggml*.dll`
+   - 还要补 MSVC 运行库：`vcomp140.dll` / `vcruntime140.dll` / `vcruntime140_1.dll` / `msvcp140.dll`
+   - 产物：`artifacts/windows/extracted/dist/VideoBridge/`（457MB），可分发 zip `VideoBridge-windows.zip`（173MB）
+   - 触发命令：
+     ```bash
+     gh workflow run build-windows.yml --repo coolSummer003/video-bridge
+     gh run list --repo coolSummer003/video-bridge --workflow build-windows.yml
+     ```
 3. 如需：macOS `.dmg` 打包 / 签名公证
 
 ## 6. 常用命令
